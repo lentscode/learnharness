@@ -31,6 +31,7 @@ export interface PluginProblemSubmissionImages {
 }
 export interface PluginBuiltinSubmissionAnswer {
 	readonly dontKnow?: boolean;
+	readonly needMoreInfo?: boolean;
 	readonly values?: readonly string[];
 	readonly other?: string;
 	readonly text?: string;
@@ -139,8 +140,9 @@ export function preparePluginProblemSubmissionImages(value: unknown): PluginProb
 }
 function builtinAnswer(value: unknown): PluginBuiltinSubmissionAnswer {
 	const item = object(value);
-	keys(item, ["dontKnow", "values", "other", "text", "confidence", "images"], ["images"]);
+	keys(item, ["dontKnow", "needMoreInfo", "values", "other", "text", "confidence", "images"], ["images"]);
 	if (Object.hasOwn(item, "dontKnow") && typeof item.dontKnow !== "boolean") throw new Error("dontKnow must be boolean");
+	if (Object.hasOwn(item, "needMoreInfo") && typeof item.needMoreInfo !== "boolean") throw new Error("needMoreInfo must be boolean");
 	if (Object.hasOwn(item, "values") && (!Array.isArray(item.values) || item.values.some(value => typeof value !== "string"))) throw new Error("Answer values must be strings");
 	for (const key of ["other", "text"] as const) if (Object.hasOwn(item, key) && typeof item[key] !== "string") throw new Error(`Answer ${key} must be a string`);
 	if (Object.hasOwn(item, "confidence") && (typeof item.confidence !== "number" || !Number.isFinite(item.confidence))) throw new Error("Answer confidence must be finite");
@@ -175,17 +177,20 @@ export function validatePluginBuiltinSubmissionAnswer(question: QuestionData, an
 	if (raw.confidence !== undefined && question.kind !== "quiz") throw new Error("Confidence is only applicable to quiz answers");
 	if (question.mode === "text") {
 		if (values.length || other || raw.dontKnow === true) throw new Error("Selection fields are not applicable to text answers");
-		if (!text && !raw.images.length) throw new Error("Answer text or answer images are required");
+		if (!raw.needMoreInfo && !text && !raw.images.length) throw new Error("Answer text or answer images are required");
 	} else {
 		if (text || (other && question.kind !== "ask")) throw new Error("Answer field is not applicable to this question");
+		if (raw.dontKnow && raw.needMoreInfo) throw new Error("dontKnow and needMoreInfo cannot be combined");
 		if (raw.dontKnow && (values.length || other)) throw new Error("dontKnow cannot be combined with an answer selection");
+		if (raw.needMoreInfo && (values.length || other)) throw new Error("needMoreInfo cannot be combined with an answer selection");
 		if (question.mode === "single-select" && values.length + (other ? 1 : 0) > 1) throw new Error("A single-select answer requires one selection");
-		if (!raw.dontKnow && !values.length && !other) throw new Error("An answer selection is required");
+		if (!raw.dontKnow && !raw.needMoreInfo && !values.length && !other) throw new Error("An answer selection is required");
 	}
-	// Preserve finite confidence even on dontKnow: existing buildAnswer deliberately
+	// Preserve finite confidence even on dontKnow/needMoreInfo: existing buildAnswer deliberately
 	// drops it there, and owns rounding/clamping for real quiz selections.
 	return {
 		...(raw.dontKnow !== undefined ? { dontKnow: raw.dontKnow } : {}),
+		...(raw.needMoreInfo !== undefined ? { needMoreInfo: raw.needMoreInfo } : {}),
 		...(raw.values !== undefined ? { values: [...raw.values] } : {}),
 		...(raw.other !== undefined ? { other: raw.other } : {}),
 		...(raw.text !== undefined ? { text: raw.text } : {}),

@@ -140,6 +140,7 @@ export function questionCardStandIn(doc: Document, c: QuestionCardContent): { qu
 		input.dataset.placeholder = OTHER_PLACEHOLDER;
 		list.append(el("div", cn(QC_OPTION_ROW, "border-dashed"), mark(!c.multiSelect), input));
 	}
+	list.append(el("button", cn(QC_OPTION_ROW, "border-dashed"), mark(true), el("span", "", "I need more info")));
 	const options = el("div", "", list);
 	const confidence = c.kind === "quiz"
 		? el("div", CONFIDENCE_ROW_PAD,
@@ -510,11 +511,18 @@ function QuestionDockForm({
 	);
 
 	const toggle = (idx: number) => setSel(toggleOption(selectMode, sel, idx));
+	const needMoreInfo = sel.needMoreInfo === true;
+	const noConfidence = sel.dontKnow || needMoreInfo;
+	const toggleDontKnow = () =>
+		setSel((prev) => ({ selected: new Set(), otherSelected: false, dontKnow: !prev.dontKnow, needMoreInfo: false }));
+	const toggleNeedMoreInfo = () =>
+		setSel((prev) => ({ selected: new Set(), otherSelected: false, dontKnow: false, needMoreInfo: !prev.needMoreInfo }));
 
 	const nativeCanSubmit =
-		qd.mode === "text"
+		needMoreInfo ||
+		(qd.mode === "text"
 			? text.trim().length > 0
-			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0;
+			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0);
 
 	const canSubmit = nativeCanSubmit || hasPendingInput?.(qd) === true;
 	const currentQuestion = useRef(qd); currentQuestion.current = qd;
@@ -526,6 +534,7 @@ function QuestionDockForm({
 		const read = (): NativeQuestionViewState => {
 			const { sel, other, confIdx } = formValues.current;
 			return { question: qd, draft: { dontKnow: sel.dontKnow,
+				...(sel.needMoreInfo ? { needMoreInfo: true } : {}),
 				values: [...sel.selected].flatMap(index => qd.options[index] ? [qd.options[index]!.value] : []),
 				otherSelected: sel.otherSelected, other, text: answerTextRef.current, thinking: thinkingTextRef.current,
 				...(kind === "quiz" ? { confidence: CONFIDENCE_STOPS[confIdx] } : {}) } };
@@ -557,12 +566,13 @@ function QuestionDockForm({
 		const { sel, other, confIdx } = formValues.current;
 		const req: AnswerRequest = {
 			dontKnow: sel.dontKnow,
+			...(sel.needMoreInfo ? { needMoreInfo: true } : {}),
 			values: [...sel.selected].map((i) => qd.options[i]!.value),
 			other: sel.otherSelected ? other : undefined,
 			text: qd.mode === "text" ? answerTextRef.current : undefined,
 			thinking: qd.mode !== "text" ? thinkingTextRef.current.trim() || undefined : undefined,
 			// Always sent on quiz answers (owner: 50 must mean 50, never
-			// "untouched"); buildAnswer drops it on "I don't know".
+			// "untouched"); buildAnswer drops it on "I don't know" / "I need more info".
 			confidence: kind === "quiz" ? CONFIDENCE_STOPS[confIdx] : undefined,
 		};
 		// Snapshot before optimistic submission unmounts the form. Ref values
@@ -608,16 +618,16 @@ function QuestionDockForm({
 	const [kbdIdx, setKbdIdx] = useState<number | null>(null);
 	const otherInputRef = useRef<HTMLDivElement>(null);
 	const thinkingRef = useRef<HTMLDivElement>(null);
-	// One row past the options is the trailing row: quiz → don't-know,
-	// ask → Other (a question never has both). Text mode (ask/explain)
-	// has no rows — the composer IS the answer surface.
+	// Two rows past the options: quiz → don't-know, ask → Other, followed by
+	// "I need more info" on both. Text mode (ask/explain) has no option-row
+	// walk — the composer IS the answer surface, with its own toggle button.
 	const optionCount = qd.mode === "text" ? 0 : qd.options.length;
-	const rowCount = qd.mode === "text" ? 0 : optionCount + 1;
+	const rowCount = qd.mode === "text" ? 0 : optionCount + 2;
 
 	const kbdAct = (idx: number) => {
 		if (idx < optionCount) toggle(idx);
-		else if (kind === "quiz")
-			setSel((prev) => ({ ...prev, selected: new Set(), otherSelected: false, dontKnow: !prev.dontKnow }));
+		else if (idx === optionCount + 1) toggleNeedMoreInfo();
+		else if (kind === "quiz") toggleDontKnow();
 		else {
 			// Space on the ask's Other row (owner refinement round,
 			// 2026-09-24): SELECTING it focuses the input for typing, but
@@ -627,7 +637,7 @@ function QuestionDockForm({
 			// the off-path lives here: clear the pick, keep the typed text,
 			// focus stays where it is. Re-selecting is the way back into
 			// the field.
-			if (sel.otherSelected) setSel((prev) => ({ ...prev, otherSelected: false, dontKnow: false }));
+			if (sel.otherSelected) setSel((prev) => ({ ...prev, otherSelected: false, dontKnow: false, needMoreInfo: false }));
 			else {
 				otherInputRef.current?.focus();
 				selectOther();
@@ -698,8 +708,8 @@ function QuestionDockForm({
 				// Global confidence cycling (owner, UI round 2026-10-01): the
 				// SAME pattern as ↑/↓ over the rows — works wherever focus
 				// sits, no click-in, no focus ring. Dead on "I don't know"
-				// (the slider grays out and nothing is sent).
-				if (kind !== "quiz" || sel.dontKnow) return;
+				// and "I need more info" (the slider grays out and nothing is sent).
+				if (kind !== "quiz" || noConfidence) return;
 				e.preventDefault();
 				setConfIdx((i) =>
 					Math.min(
@@ -812,13 +822,13 @@ function QuestionDockForm({
 					<span
 						className={cn(
 							QC_CONFIDENCE_LABEL,
-							sel.dontKnow ? "text-muted-foreground/50" : "text-muted-foreground",
+							noConfidence ? "text-muted-foreground/50" : "text-muted-foreground",
 						)}
 					>
 						Confidence
 					</span>
 					<div
-						className={cn(QC_CONFIDENCE_TRACK, sel.dontKnow && "opacity-40")}
+						className={cn(QC_CONFIDENCE_TRACK, noConfidence && "opacity-40")}
 						data-testid="confidence-track"
 					>
 						{/* The RAIL is painted here, not on the input: this overlay spans
@@ -843,7 +853,7 @@ function QuestionDockForm({
 							max={100}
 							step={1}
 							value={CONFIDENCE_STOPS[confIdx]}
-							disabled={sel.dontKnow}
+							disabled={noConfidence}
 							aria-label="Confidence — the probability your selected answer is correct"
 							aria-valuetext={`${CONFIDENCE_STOPS[confIdx]} percent`}
 							title="The probability your selected answer is correct — 50% is a coin flip. Adjust with ←/→."
@@ -880,10 +890,10 @@ function QuestionDockForm({
 							// that same 12px + 8px; shorter values sit CENTERED in
 							// it, splitting their spare width across both sides.
 							QC_CONFIDENCE_VALUE,
-							sel.dontKnow && "text-muted-foreground/50",
+							noConfidence && "text-muted-foreground/50",
 						)}
 					>
-						{sel.dontKnow ? "—" : `${CONFIDENCE_STOPS[confIdx]}%`}
+						{noConfidence ? "—" : `${CONFIDENCE_STOPS[confIdx]}%`}
 					</span>
 				</div>
 			</div>
@@ -966,9 +976,7 @@ function QuestionDockForm({
 				{kind === "quiz" && (
 					<button
 						type="button"
-						onClick={() =>
-							setSel((prev) => ({ ...prev, selected: new Set(), otherSelected: false, dontKnow: !prev.dontKnow }))
-						}
+						onClick={toggleDontKnow}
 						data-kbdrow={optionCount}
 						aria-pressed={sel.dontKnow}
 						className={cn(
@@ -1064,9 +1072,61 @@ function QuestionDockForm({
 						/>
 					</div>
 				)}
+
+				<button
+					type="button"
+					onClick={toggleNeedMoreInfo}
+					data-testid="need-more-info-option"
+					data-kbdrow={optionCount + 1}
+					aria-pressed={needMoreInfo}
+					className={cn(
+						QC_OPTION_ROW, "border-dashed",
+						needMoreInfo ? "border-primary text-foreground" : "text-muted-foreground",
+						kbdIdx === optionCount + 1 && !needMoreInfo && "ring-1 ring-border bg-accent/40",
+					)}
+				>
+					<span
+						className={cn(
+							QC_OPTION_MARK, "rounded-full",
+							needMoreInfo
+								? "border-primary bg-primary text-primary-foreground"
+								: "border-muted-foreground/40",
+						)}
+					>
+						{needMoreInfo && <span className="size-1.5 rounded-full bg-current" />}
+					</span>
+					<span>I need more info</span>
+				</button>
 			</div>
 		</div>
 	);
+
+	const textNeedMoreInfoRow = qd.mode === "text" ? (
+		<div className={QC_OPTION_LIST}>
+			<button
+				type="button"
+				onClick={toggleNeedMoreInfo}
+				data-testid="need-more-info-option"
+				aria-pressed={needMoreInfo}
+				className={cn(
+					QC_OPTION_ROW, "border-dashed",
+					needMoreInfo ? "border-primary text-foreground" : "text-muted-foreground",
+				)}
+			>
+				<span
+					className={cn(
+						QC_OPTION_MARK, "rounded-full",
+						needMoreInfo
+							? "border-primary bg-primary text-primary-foreground"
+							: "border-muted-foreground/40",
+					)}
+				>
+					{needMoreInfo && <span className="size-1.5 rounded-full bg-current" />}
+				</span>
+				<span>I need more info</span>
+			</button>
+		</div>
+	) : null;
 
 	return (
 		<div ref={rootRef} data-testid="question-dock" data-question-layout={columns ? "columns" : "stacked"} className="relative">
@@ -1103,6 +1163,7 @@ function QuestionDockForm({
 						className={columns ? cn("flex min-h-0 flex-col overflow-y-auto", ANSWER_OPTIONS_PAD) : "contents"}
 					>
 						{optionList}
+						{textNeedMoreInfoRow}
 						{confidenceRow}
 					</div>
 				</div>
@@ -1125,7 +1186,7 @@ function QuestionDockForm({
 					className="rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
 				>
 					<div className="px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-						{qd.mode === "text" ? "Your answer" : "YOUR THINKING"}
+						{needMoreInfo ? "WHAT WOULD YOU LIKE CLARIFIED?" : qd.mode === "text" ? "Your answer" : "YOUR THINKING"}
 					</div>
 					{qd.mode === "text" ? (
 						<PathInput
@@ -1153,7 +1214,7 @@ function QuestionDockForm({
 									submit();
 								}
 							}}
-							placeholder="Type your answer…"
+							placeholder={needMoreInfo ? "Ask what's unclear, or submit for more context…" : "Type your answer…"}
 							className="field-sizing-content lh-input max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 						/>
 					) : (
@@ -1184,7 +1245,7 @@ function QuestionDockForm({
 									submit();
 								}
 							}}
-							placeholder="Why this answer? Whatever comes to mind."
+							placeholder={needMoreInfo ? "Ask what's unclear, or submit for more context…" : "Why this answer? Whatever comes to mind."}
 							className={cn(
 								"field-sizing-content lh-input max-h-48 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground/70",
 								// Phase-scaled prominence: teaching invites depth,
@@ -1202,7 +1263,7 @@ function QuestionDockForm({
 							disabled={!canSubmit || compactionRunning || preparing}
 							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 						>
-							Submit answer
+							{needMoreInfo ? "Ask for more info" : "Submit answer"}
 						</Button>
 					</div>
 				</div>

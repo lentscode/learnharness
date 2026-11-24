@@ -120,7 +120,7 @@ test("answered card: a remount reuses its solved layout; adaptation off keeps to
 	} finally { await act(async () => off.root.unmount()); off.host.remove(); }
 });
 
-test("the question card stand-in mirrors the pending card: options, I don't know, confidence", () => {
+test("the question card stand-in mirrors the pending card: options, I don't know, I need more info, confidence", () => {
 	const live = (html: string) => { const el = document.createElement("div"); el.innerHTML = html; return el; };
 	const quiz = questionCardStandIn(document as unknown as Document, {
 		label: "Prediction", kind: "quiz", multiSelect: false,
@@ -128,8 +128,9 @@ test("the question card stand-in mirrors the pending card: options, I don't know
 	});
 	assert.equal(quiz.question.textContent, "PredictionQ");
 	const rows = quiz.options.firstElementChild!.children;
-	assert.equal(rows.length, 3, "two options + I don't know");
+	assert.equal(rows.length, 4, "two options + I don't know + I need more info");
 	assert.match(rows[2]!.className, /border-dashed/);
+	assert.match(rows[3]!.className, /border-dashed/);
 	for (const row of rows) {
 		assert.match(row.className, /items-center/);
 		assert.doesNotMatch(row.firstElementChild!.className, /mt-0\.5/);
@@ -141,6 +142,6 @@ test("the question card stand-in mirrors the pending card: options, I don't know
 		question: live("<p>Q</p>"), context: live("<p>ctx</p>"), options: [live("<p>A</p>")],
 	});
 	assert.equal(ask.question.textContent, "Question · select all that applyQctx");
-	assert.equal(ask.options.firstElementChild!.children.length, 2, "option + the empty Other field");
+	assert.equal(ask.options.firstElementChild!.children.length, 3, "option + the empty Other field + I need more info");
 	assert.equal(ask.confidence, null);
 });

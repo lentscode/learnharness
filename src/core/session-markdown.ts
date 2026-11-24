@@ -95,6 +95,8 @@ function toolResultBody(result: ToolResultMessage, ctx?: MarkdownContext): { hea
 				questionText: string;
 				correct: boolean;
 				dontKnow: boolean;
+				needMoreInfo: boolean;
+				thinking: string;
 				note: string;
 				text: string;
 				answers: string[];
@@ -119,12 +121,14 @@ function toolResultBody(result: ToolResultMessage, ctx?: MarkdownContext): { hea
 						: "Recall check"; // explain — the teach free-recall name
 		const question = typeof out?.questionText === "string" && out.questionText ? out.questionText : "(no question text)";
 		const body = [`**Q:** ${question}`];
+		const thought = typeof out?.thinking === "string" && out.thinking ? out.thinking : typeof out?.note === "string" && out.note ? out.note : undefined;
 		if (out?.dismissed === true) body.push("The learner skipped this check.");
+		else if (out?.needMoreInfo === true) body.push("The learner asked for more information about this question.");
 		else if (out?.dontKnow === true) body.push("The learner did not know.");
 		else if (out?.correct === true) body.push("The learner answered correctly.");
 		else if (out?.correct === false) body.push("The learner answered incorrectly.");
 		else if (typeof out?.text === "string" && out.text.trim()) body.push(`The learner answered in his own words: ${out.text.trim()}`);
-		if (typeof out?.note === "string" && out.note) body.push(`*(his thinking: ${out.note})*`);
+		if (thought) body.push(`*(his thinking: ${thought})*`);
 		return { heading, body };
 	}
 
@@ -158,14 +162,16 @@ function toolResultBody(result: ToolResultMessage, ctx?: MarkdownContext): { hea
 	if (result.toolName === "ask_user_question") {
 		const question = typeof out?.questionText === "string" && out.questionText ? out.questionText : "(no question text)";
 		const body = [`**Q:** ${question}`];
+		const thought = typeof out?.thinking === "string" && out.thinking ? out.thinking : typeof out?.note === "string" && out.note ? out.note : undefined;
 		const chosen = [
 			...(Array.isArray(out?.answers) ? out!.answers! : []),
 			...(typeof out?.other === "string" && out.other.trim() ? [out.other.trim()] : []),
 		];
-		if (typeof out?.text === "string" && out.text.trim()) body.push(`The learner answered: ${out.text.trim()}`);
+		if (out?.needMoreInfo === true) body.push("The learner asked for more information about this question.");
+		else if (typeof out?.text === "string" && out.text.trim()) body.push(`The learner answered: ${out.text.trim()}`);
 		else if (chosen.length > 0) body.push(`The learner chose: ${chosen.join(", ")}`);
 		else if (out?.dismissed === true) body.push("The learner skipped this question.");
-		if (typeof out?.note === "string" && out.note) body.push(`*(his thinking: ${out.note})*`);
+		if (thought) body.push(`*(his thinking: ${thought})*`);
 		return { heading: "Question", body };
 	}
 

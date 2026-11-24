@@ -133,6 +133,21 @@ describe("messageMarkdown", () => {
 		assert.equal(messageMarkdown(result("r2", "j2", "research", {}, true), "r2"), null, "a failed call is retry context");
 		assert.equal(messageMarkdown(user("u3", "   "), "u3"), null, "empty text renders nothing");
 	});
+
+	it("needMoreInfo blocks render cleanly for quizzes and ask_user_question", () => {
+		const quizMd = messageMarkdown(
+			result("r1", "q1", "quiz", { questionText: "What is entropy?", needMoreInfo: true, dontKnow: false, thinking: "Define microstate first" }),
+			"r1",
+		)!;
+		assert.match(quizMd, /The learner asked for more information about this question\./);
+		assert.match(quizMd, /\*\(his thinking: Define microstate first\)\*/);
+
+		const askMd = messageMarkdown(
+			result("r2", "a1", "ask_user_question", { questionText: "Which track?", needMoreInfo: true, dontKnow: false }),
+			"r2",
+		)!;
+		assert.match(askMd, /The learner asked for more information about this question\./);
+	});
 });
 
 describe("sessionMarkdown — the practice join (owner-approved, 2026-10-06)", () => {

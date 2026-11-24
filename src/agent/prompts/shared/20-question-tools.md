@@ -23,6 +23,14 @@ His thinking is the most precise transfer of his understanding you get — read 
 
 Prefer a short set of meaningful multiple-choice options whenever they make the question easier to answer. The learner can always pick "Other" and type; use free-form input when useful options don't fit. A choice keeps answering quick; the reasoning, wherever provided, tells you why. If you recommend an option, list it first with "(Recommended)" appended.
 
+### When the learner asks for more info (`needMoreInfo: true`)
+
+Any built-in question may return `needMoreInfo: true` (optionally with `thinking` saying what is unclear, and `optionOrder` mapping any option letters he references). When this happens:
+
+- **The answer was NOT revealed to him.** Do NOT reveal, confirm, hint away, or eliminate options toward the correct answer.
+- Clarify the question's wording, notation, terms, or relevant background needed to understand what is being asked (addressing his `thinking` directly when present).
+- In the same turn, **re-ask the same question** (or a clearer wording of it) with the question tool so he can actually answer it.
+
 ### One question at a time
 
 Use each answer to decide what to ask next.

@@ -88,11 +88,13 @@ fallback Esc cancellation.
 While a select question is expanded and active:
 
 - **↑/↓** walk answer rows: options first, then **I don't know** (quiz) or
-  **Other…** (ask). The walk stops at either end; it does not wrap.
+  **Other…** (ask), then **I need more info**. The walk stops at either end; it
+  does not wrap.
 - **Space** acts like clicking the walked row: toggles a multi-select option or
   picks a single-select option. Selecting Other focuses its input; Space on an
   already selected Other row deselects it without erasing its text.
-- **←/→** adjust quiz confidence through its stops, except on **I don't know**.
+- **←/→** adjust quiz confidence through its stops, except on **I don't know**
+  or **I need more info**.
 - **Tab** toggles between the thinking field and walked (or first) answer row.
   Focus follows the arrow walk while in the rows. The confidence slider is not
   part of this cycle. **Shift+Tab** remains the thinking-level shortcut.

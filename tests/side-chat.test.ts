@@ -19,7 +19,7 @@ const { composeSideChatInstructions } = await import("../src/agent/side-chat.ts"
 const { subscribe } = await import("../src/core/events.ts");
 const core = await import("../src/core/index.ts");
 import { createFauxCore, fauxAssistantMessage, type AssistantMessage, type ToolCall, type TranscriptContext } from "@earendil-works/pi-ai";
-import type { LhMessage, SideChatAnchor, SideChatThread, QuestionAnswerData } from "../src/core/index.ts";
+import type { LhMessage, SideChatAnchor, SideChatThread, QuestionAnswerData, QuestionData } from "../src/core/index.ts";
 import type { PiEngine } from "../src/agent/models.ts";
 
 const {
@@ -155,6 +155,43 @@ describe("side lesson document", () => {
 		assert.doesNotMatch(doc, /SECRET-EXPLANATION/);
 		assert.doesNotMatch(doc, /SECRET-COMMITTED/);
 		assert.doesNotMatch(doc, /correctAnswer|"dq"/);
+	});
+
+	it("never leaks the key, explanation, or committed answer on needMoreInfo cards", () => {
+		const quizQd: QuestionData = {
+			id: "q-nmi",
+			kind: "quiz",
+			question: QUIZ_ARGS.question,
+			mode: "single-select",
+			options: core.normalizeOptions(QUIZ_ARGS.options),
+			optionOrder: { A: 1, B: 2 },
+			correctIndices: [1],
+			explanation: QUIZ_ARGS.explanation,
+			createdAt: new Date().toISOString(),
+		};
+		const explainArgs = { type: "check", nodeId: "n", question: "Explain the slope.", correctAnswer: "SECRET-COMMITTED" };
+		const explainQd: QuestionData = {
+			id: "e-nmi",
+			kind: "explain",
+			question: explainArgs.question,
+			mode: "text",
+			options: [],
+			committedAnswer: explainArgs.correctAnswer,
+			createdAt: new Date().toISOString(),
+		};
+		const doc = sideChatLessonDocument([
+			assistant([call("q-nmi", "quiz", QUIZ_ARGS)]),
+			result("q-nmi", "quiz", core.buildAnswer(quizQd, { needMoreInfo: true, thinking: "What does h→0 mean?" }, "quiz")),
+			assistant([call("e-nmi", "explain", explainArgs)]),
+			result("e-nmi", "explain", core.buildAnswer(explainQd, { needMoreInfo: true, text: "Which curve?" }, "explain")),
+		]);
+		assert.match(doc, /asked for more info — answer not revealed/);
+		assert.match(doc, /What does h→0 mean\?/);
+		assert.match(doc, /Which curve\?/);
+		assert.doesNotMatch(doc, /SECRET-EXPLANATION/);
+		assert.doesNotMatch(doc, /SECRET-COMMITTED/);
+		assert.doesNotMatch(doc, /\*\(correct\)\*/);
+		assert.doesNotMatch(doc, /Verdict:/);
 	});
 
 	it("uses the same letters before and after answering a probe, without spoiling the open answer", () => {

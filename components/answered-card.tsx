@@ -133,6 +133,7 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 
 	const isQuiz = answer.kind === "quiz";
 	const isExplain = answer.kind === "explain";
+	const isNeedMoreInfo = answer.needMoreInfo === true;
 	const selectedIdx = new Set(answer.answers.map((a) => a.index));
 	const correctIdx = new Set(answer.correctIndices ?? []);
 	// The question's own context rides the ORIGINAL CALL, not the answer
@@ -176,14 +177,18 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 			    cards label Probe/Recall — the phase boundary visible in the
 			    transcript. No `tool` on old records: kind labels as before. */}
 				{label}
-				{isQuiz &&
+				{isNeedMoreInfo ? (
+					<StatusBadge text="asked for more info" />
+				) : (
+					isQuiz &&
 					(answer.dontKnow ? (
 						<StatusBadge text="didn't know" />
 					) : answer.correct ? (
 						<StatusBadge text="correct" color="var(--lh-success)" />
 					) : (
 						<StatusBadge text="incorrect" color="var(--lh-error)" />
-					))}
+					))
+				)}
 			</div>
 			<div ref={questionTextRef} className="mb-3 font-medium">
 				<ToolContentResponse>{answer.questionText}</ToolContentResponse>
@@ -201,8 +206,8 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 			{((answer.options?.length ?? 0) > 0 || answer.other) && (
 				<div ref={optionsRef} className="flex flex-col gap-1.5 text-sm">
 					{answer.options?.map((opt) => {
-						const sel = selectedIdx.has(opt.index);
-						const key = isQuiz && correctIdx.has(opt.index);
+						const sel = !isNeedMoreInfo && selectedIdx.has(opt.index);
+						const key = !isNeedMoreInfo && isQuiz && correctIdx.has(opt.index);
 						const letter = optionLetters.get(opt.index);
 						return (
 							<div
@@ -216,7 +221,7 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 								)}
 							>
 								{letter && <span data-option-letter={letter} className="w-3 shrink-0 text-center text-xs font-medium text-muted-foreground/70">{letter}</span>}
-								{isQuiz && (
+								{isQuiz && !isNeedMoreInfo && (
 									// Zapf-Dingbats-derived SVG outlines — the exact LaTeX \ding{51}/
 									// \ding{55} hand-drawn shapes (owner, round 6); see ui/glyph-mark.
 									<span
@@ -272,7 +277,7 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 			    "I don't know" sent none (its slider was grayed out), explain and
 			    ask never had one, and records from before the feature carry no
 			    field — nothing to show, nothing rendered. */}
-			{isQuiz && answer.confidence != null && (
+			{isQuiz && !isNeedMoreInfo && answer.confidence != null && (
 				<div className="mt-3 flex items-center gap-3" data-testid="answered-confidence">
 					<ConfidenceRail value={answer.confidence} className="min-w-0 flex-1" />
 					{/* Sized for "100%", shorter values centered (as on the question card). */}
@@ -281,7 +286,10 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 					</span>
 				</div>
 			)}
-			{answer.dontKnow && isQuiz && (
+			{isNeedMoreInfo && (
+				<div className="mt-2 text-sm text-muted-foreground">Asked for more info.</div>
+			)}
+			{!isNeedMoreInfo && answer.dontKnow && isQuiz && (
 				<div className="mt-2 text-sm text-muted-foreground">Answered “I don't know”.</div>
 			)}
 			</div>
@@ -294,9 +302,10 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 				    the accent lift read too light); rail only, heights identical. */
 				<ThinkingBlock
 					testId="your-thinking"
-					label="YOUR THINKING"
+					label={isNeedMoreInfo ? "YOUR QUESTION" : "YOUR THINKING"}
 					text={answer.thinking ?? answer.note ?? ""}
 					images={answer.images?.thinking}
+					defaultOpen={isNeedMoreInfo}
 					inCard
 				/>
 			)}
@@ -304,7 +313,7 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 			{/* px-3→removed: card p-4 + box px-3 double-inset sat the "Why" label deeper
 			    than the option box edges (owner, round 3). Sides flush with everything
 			    else; py-2 stays for vertical air. */}
-			{isQuiz && answer.explanation && (
+			{isQuiz && !isNeedMoreInfo && answer.explanation && (
 				/* The TUCKED explanation — ALL questions (owner, 2026-10-07): the
 				   verdict shows, the explanation sits collapsed behind the Why
 				   toggle — viewable, never center stage. Identical to the
@@ -331,7 +340,7 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 			{/* The explain reveal (owner ruling 2026-09-27): the committed answer
 			    — one field, reasoning included — shown on submit; no verdict,
 			    the model's next reply IS the grading. */}
-			{isExplain && answer.committed && (
+			{isExplain && !isNeedMoreInfo && answer.committed && (
 				<div className="mt-3 rounded-lg bg-muted py-2 text-sm text-muted-foreground">
 					<span className="font-medium text-foreground">The answer: </span>
 					<ToolContentResponse className="inline [&>p:first-child]:inline [&>p:first-child]:m-0">{answer.committed}</ToolContentResponse>

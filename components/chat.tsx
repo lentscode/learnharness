@@ -731,7 +731,7 @@ export function Chat({
 			const raw = capture();
 			saveQuestionDraft(original.key, { readingThinking: readingThinkingRef.current });
 			return { type: "answer", answer: {
-				...(raw.dontKnow !== undefined ? { dontKnow: raw.dontKnow } : {}), ...(raw.values !== undefined ? { values: raw.values } : {}),
+				...(raw.dontKnow !== undefined ? { dontKnow: raw.dontKnow } : {}), ...(raw.needMoreInfo !== undefined ? { needMoreInfo: raw.needMoreInfo } : {}), ...(raw.values !== undefined ? { values: raw.values } : {}),
 				...(raw.other !== undefined ? { other: raw.other } : {}), ...(raw.text !== undefined ? { text: raw.text } : {}),
 				...(raw.confidence !== undefined ? { confidence: raw.confidence } : {}), images: [],
 			}, thinking: { text: raw.thinking ?? "", images: [] }, readingThinking: { text: requiresReveal ? readingThinkingRef.current : "", images: [] } };

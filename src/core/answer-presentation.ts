@@ -33,8 +33,10 @@ export function answerForPresentation(answer: QuestionAnswerData, input: unknown
 	const source = quiz ?? explain ?? (answer.kind === "ask" ? parseAskInput(input) : undefined);
 	if (!source) return answer;
 	const projected = { ...answer, questionText: source.question };
-	if (quiz) projected.explanation = quiz.explanation;
-	if (explain) projected.committed = explain.correctAnswer;
+	if (!answer.needMoreInfo) {
+		if (quiz) projected.explanation = quiz.explanation;
+		if (explain) projected.committed = explain.correctAnswer;
+	}
 	if (!answer.options?.length || !("options" in source) || !source.options?.length) return projected;
 
 	const original = normalizeOptions(source.options);

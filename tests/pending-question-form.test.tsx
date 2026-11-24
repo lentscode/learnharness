@@ -130,3 +130,78 @@ test("saving a unique live question preserves its mounted form and selection", a
 		assert.ok(host.querySelector('[role="radio"][aria-checked="true"]'));
 	} finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+test("I need more info on quiz disables confidence, is mutually exclusive, and submits without revealing the answer", async () => {
+	const host = document.createElement("div"); document.body.append(host);
+	const root = createRoot(host);
+	let submitted: import("../src/core/question-core.ts").QuestionAnswerData | undefined;
+	const input: QuizToolInput = {
+		type: "check",
+		nodeId: "n1",
+		question: "What is $F$?",
+		options: [{ label: "Force", value: "force" }, { label: "Flux", value: "flux" }],
+		explanation: "SECRET EXPLANATION",
+		correctAnswer: "force",
+	};
+	try {
+		await act(async () => root.render(<QuestionDock
+			toolName="quiz" toolCallId="q-nmi-dom" input={input}
+			expanded onExpand={() => {}} onSubmit={a => { submitted = a; }} dictationClaim={false} />));
+		const firstOption = host.querySelector<HTMLButtonElement>('[role="radio"]')!;
+		const nmiBtn = host.querySelector<HTMLButtonElement>('[data-testid="need-more-info-option"]')!;
+		const slider = host.querySelector<HTMLInputElement>('[data-testid="confidence-slider"]')!;
+		const submitBtn = host.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+
+		await act(async () => { firstOption.click(); });
+		assert.equal(firstOption.getAttribute("aria-checked"), "true");
+		assert.equal(slider.disabled, false);
+
+		await act(async () => { nmiBtn.click(); });
+		assert.equal(nmiBtn.getAttribute("aria-pressed"), "true");
+		assert.equal(firstOption.getAttribute("aria-checked"), "false");
+		assert.equal(slider.disabled, true);
+		assert.equal(host.querySelector('[data-testid="confidence-value"]')?.textContent, "—");
+		assert.equal(submitBtn.textContent, "Ask for more info");
+		assert.equal(submitBtn.disabled, false);
+
+		await act(async () => {
+			const editor = host.querySelector<HTMLElement>('[data-testid="thinking-field"] [data-file-path-input]')!;
+			editor.textContent = "What units are assumed?";
+			editor.dispatchEvent(new window.Event("input", { bubbles: true }));
+		});
+		await act(async () => { host.querySelector('form')!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); });
+		assert.equal(submitted?.needMoreInfo, true);
+		assert.equal(submitted?.dontKnow, false);
+		assert.deepEqual(submitted?.answers, []);
+		assert.equal(submitted?.correct, undefined);
+		assert.equal(submitted?.explanation, undefined);
+		assert.equal(submitted?.confidence, undefined);
+		assert.equal(submitted?.thinking, "What units are assumed?");
+	} finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+test("I need more info on text-mode explain enables empty submit and omits committed answer", async () => {
+	const host = document.createElement("div"); document.body.append(host);
+	const root = createRoot(host);
+	let submitted: import("../src/core/question-core.ts").QuestionAnswerData | undefined;
+	try {
+		await act(async () => root.render(<QuestionDock
+			toolName="explain" toolCallId="e-nmi-dom"
+			input={{ type: "check", nodeId: "n1", question: "Explain entropy.", correctAnswer: "SECRET COMMITTED" } as never}
+			expanded onExpand={() => {}} onSubmit={a => { submitted = a; }} dictationClaim={false} />));
+		const nmiBtn = host.querySelector<HTMLButtonElement>('[data-testid="need-more-info-option"]')!;
+		const submitBtn = host.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+		assert.equal(submitBtn.disabled, true);
+
+		await act(async () => { nmiBtn.click(); });
+		assert.equal(nmiBtn.getAttribute("aria-pressed"), "true");
+		assert.equal(submitBtn.disabled, false);
+		assert.equal(submitBtn.textContent, "Ask for more info");
+
+		await act(async () => { host.querySelector('form')!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); });
+		assert.equal(submitted?.needMoreInfo, true);
+		assert.equal(submitted?.committed, undefined);
+		assert.equal(submitted?.text, undefined);
+		assert.equal(submitted?.thinking, undefined);
+	} finally { await act(async () => root.unmount()); host.remove(); }
+});
