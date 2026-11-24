@@ -357,7 +357,11 @@ function quizHeading(answer: QuestionAnswerData, tool: string): string {
 function answeredQuestionMarkdown(result: ToolResultMessage, input: Record<string, unknown> | undefined): string | null {
 	const answer = result.details as QuestionAnswerData | undefined;
 	if (!answer || typeof answer !== "object" || typeof answer.questionText !== "string") return null;
-	const lines: string[] = [`### ${quizHeading(answer, result.toolName)} (answered)`];
+	const lines: string[] = [
+		answer.needMoreInfo
+			? `### ${quizHeading(answer, result.toolName)} (asked for more info — answer not revealed)`
+			: `### ${quizHeading(answer, result.toolName)} (answered)`,
+	];
 	if (typeof answer.readingThinking === "string" && answer.readingThinking.trim()) {
 		lines.push(`*The learner's notes while reading, before this question:* ${answer.readingThinking.trim()}`);
 	}
@@ -366,6 +370,23 @@ function answeredQuestionMarkdown(result: ToolResultMessage, input: Record<strin
 	if (details) lines.push(details);
 	if (answer.dismissed) {
 		lines.push("The learner skipped this question.");
+		return lines.join("\n\n");
+	}
+	if (answer.needMoreInfo) {
+		if (answer.options && answer.options.length > 0) {
+			const letters = answeredOptionLetters(answer, input);
+			lines.push(
+				answer.options
+					.map((o) => {
+						const letter = letters.get(o.index);
+						return `- ${letter ? `${letter}. ` : ""}${o.label}`;
+					})
+					.join("\n"),
+			);
+		}
+		lines.push("The learner asked for more information about this question (answer not revealed).");
+		const thinking = answer.thinking ?? answer.note;
+		if (typeof thinking === "string" && thinking.trim()) lines.push(`*The learner's question:* ${thinking.trim()}`);
 		return lines.join("\n\n");
 	}
 	const chosen = new Set((answer.answers ?? []).map((a) => a.index));

@@ -101,6 +101,22 @@ describe("raw builtin answer validation uses existing grader", () => {
 		assert.doesNotThrow(() => validatePluginBuiltinSubmissionAnswer(ask, answer({ values: ["b"], other: "custom" })));
 		assert.throws(() => validatePluginBuiltinSubmissionAnswer({ ...ask, mode: "single-select" }, answer({ values: ["b"], other: "custom" })));
 	});
+	it("accepts needMoreInfo alone on select and text questions, and rejects combining it with selections or dontKnow", () => {
+		const req = validatePluginBuiltinSubmissionAnswer(question, answer({ needMoreInfo: true, values: [], confidence: 50 }));
+		assert.equal(req.needMoreInfo, true);
+		assert.equal(buildAnswer(question, req).confidence, undefined);
+		assert.equal(buildAnswer(question, req).correct, undefined);
+		for (const invalid of [
+			{ needMoreInfo: true, dontKnow: true },
+			{ needMoreInfo: true, values: ["a"] },
+			{ needMoreInfo: "yes" as never },
+		]) assert.throws(() => validatePluginBuiltinSubmissionAnswer(question, answer(invalid)));
+
+		const textQuestion: QuestionData = { ...question, kind: "explain", mode: "text", committedAnswer: "SECRET" };
+		const textReq = validatePluginBuiltinSubmissionAnswer(textQuestion, answer({ needMoreInfo: true, text: "" }));
+		assert.equal(textReq.needMoreInfo, true);
+		assert.equal(buildAnswer(textQuestion, textReq).committed, undefined);
+	});
 });
 
 describe("interceptor definition capture and deterministic ordering", () => {

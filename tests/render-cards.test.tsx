@@ -840,4 +840,65 @@ describe("question context renders as markdown everywhere (owner, 2026-10-12)", 
 		assert.equal((html.match(/class="katex"/g) ?? []).length, 0, "no context slot appears from nothing");
 		assert.ok(!html.includes("lh-prose block text-xs"), "no description slot without an ask input");
 	});
+
+	it("QuestionDock renders 'I need more info' on quiz, explain, and ask questions", () => {
+		const quizHtml = renderDock({ toolName: "quiz", toolCallId: "q-nmi", input: quizInput as never });
+		assert.match(quizHtml, /data-testid="need-more-info-option"/);
+		assert.match(quizHtml, /I need more info/);
+
+		const explainHtml = renderDock({
+			toolName: "explain",
+			toolCallId: "e-nmi",
+			input: { type: "check", nodeId: "n", question: "Explain momentum.", correctAnswer: "SECRET" } as never,
+		});
+		assert.match(explainHtml, /data-testid="need-more-info-option"/);
+		assert.match(explainHtml, /I need more info/);
+
+		const askSelectHtml = renderDock({
+			toolName: "ask_user_question",
+			toolCallId: "a-nmi",
+			input: { question: "Pick a pace", options: [{ label: "Fast" }, { label: "Slow" }] } as never,
+		});
+		assert.match(askSelectHtml, /data-testid="need-more-info-option"/);
+		assert.match(askSelectHtml, /I need more info/);
+
+		const askTextHtml = renderDock({
+			toolName: "ask_user_question",
+			toolCallId: "at-nmi",
+			input: { question: "What is your goal?" } as never,
+		});
+		assert.match(askTextHtml, /data-testid="need-more-info-option"/);
+	});
+
+	it("AnsweredCard hides grading, explanation, and committed answer on needMoreInfo (even when original call input is passed)", () => {
+		const quizAns = buildAnswer(quizQD(), { needMoreInfo: true, thinking: "What does innermost mean?" }, "quiz");
+		const quizHtml = renderToStaticMarkup(<AnsweredCard answer={quizAns} input={quizInput} />);
+		assert.match(quizHtml, /asked for more info/);
+		assert.match(quizHtml, /Asked for more info\./);
+		assert.match(quizHtml, /YOUR QUESTION/);
+		assert.match(quizHtml, /What does innermost mean\?/);
+		assert.ok(!quizHtml.includes('data-mark="check"'), "no check mark revealed");
+		assert.ok(!quizHtml.includes('data-mark="x"'), "no x mark revealed");
+		assert.ok(!quizHtml.includes("border-success"), "no correct option highlight");
+		assert.ok(!quizHtml.includes("tucked-explanation"), "no Why explanation toggle");
+		assert.ok(!quizHtml.includes("innermost orbits"), "explanation text never leaked");
+		assert.ok(!quizHtml.includes("answered-confidence"), "no confidence rail");
+
+		const explainInput = { type: "check", nodeId: "n", question: "Explain conservation.", correctAnswer: "SECRET COMMITTED" };
+		const explainQd: QuestionData = {
+			id: "e-card",
+			kind: "explain",
+			question: explainInput.question,
+			mode: "text",
+			options: [],
+			committedAnswer: explainInput.correctAnswer,
+			createdAt: new Date().toISOString(),
+		};
+		const explainAns = buildAnswer(explainQd, { needMoreInfo: true, text: "Which system?" }, "explain");
+		const explainHtml = renderToStaticMarkup(<AnsweredCard answer={explainAns} input={explainInput} />);
+		assert.match(explainHtml, /asked for more info/);
+		assert.match(explainHtml, /Which system\?/);
+		assert.ok(!explainHtml.includes("SECRET COMMITTED"), "committed answer never revealed");
+		assert.ok(!explainHtml.includes("The answer:"), "no committed answer block");
+	});
 });

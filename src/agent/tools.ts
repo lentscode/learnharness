@@ -85,7 +85,8 @@ export const askUserQuestionTool: AgentTool<typeof askInputSchema> = {
 	description:
 		"Ask the learner a single question. NOT graded — there is no correct answer. " +
 		"Use when requirements are ambiguous, preferences are needed, a decision would materially affect the lesson, " +
-		"or you need an open-ended response. " + optionLetterDescription,
+		"or you need an open-ended response. Includes an automatic 'I need more info' choice so the learner can ask for clarification before answering. " +
+		optionLetterDescription,
 	parameters: askInputSchema,
 	prepareArguments: prepareQuestionArguments,
 	executionMode: "sequential",
@@ -150,7 +151,8 @@ function quizDescription(delta: { name: "quiz" | "probe"; nodeId: boolean; types
 		" always has a " +
 		"correct answer supplied by you, marks the learner's selection right/wrong, reveals the correct answer, and " +
 		"can show an explanation. Options-only: single-select or multi-select, plus an automatic 'I don't know' " +
-		"choice so the learner can signal a genuine gap instead of guessing. An always-present optional thinking " +
+		"choice so the learner can signal a genuine gap instead of guessing, and an automatic 'I need more info' " +
+		"choice so the learner can ask for clarification without revealing the answer. An always-present optional thinking " +
 		"field lets the learner attach his reasoning to ANY answer; it reaches you only when non-empty. " +
 		"No free-text answers — for non-graded questions use ask_user_question instead. " +
 		optionLetterDescription + " " +
@@ -186,7 +188,8 @@ function explainDescription(name: "explain" | "recall", nodeId: boolean): string
 		" always has one. THE COMMITMENT RULE: " +
 		"correctAnswer is the FULL correct answer in your own words, reasoning included, COMMITTED before he ever " +
 		"sees the question. When his answer returns, grade it strictly against the commitment — never revise it " +
-		"after seeing his words. He sees the committed answer on submit. " +
+		"after seeing his words. He sees the committed answer on submit unless he chooses the automatic 'I need more info' " +
+		"option to ask for clarification without revealing the answer. " +
 		(nodeId
 			? "Set `nodeId` (required) to the plan node this question is about — validated at call time against the session's plan map. "
 			: "")

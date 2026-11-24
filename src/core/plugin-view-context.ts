@@ -15,6 +15,7 @@ type QuestionInput = Readonly<PluginQuestionInput<ImmutableJson>>;
 type ProblemInput = Readonly<Omit<PluginProblemInput<ImmutableJson>, "target">> & { readonly target?: readonly string[] };
 export interface PluginNativeQuestionViewDraft {
   readonly dontKnow: boolean;
+  readonly needMoreInfo?: boolean;
   readonly values: readonly string[];
   readonly otherSelected: boolean;
   readonly other: string;

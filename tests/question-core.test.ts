@@ -819,3 +819,75 @@ describe("the quiz role field (predict | check)", () => {
 		assert.equal(cleaned.type, "check", "role survives the display parse (the dock gates collapse + labels on it)");
 	});
 });
+
+describe("needMoreInfo (clarification without answer reveal)", () => {
+	const quizQd: QuestionData = {
+		id: "q-more",
+		kind: "quiz",
+		questionType: "check",
+		question: "Which planet is closest to the sun?",
+		mode: "single-select",
+		options: normalizeOptions([
+			{ label: "Mercury", value: "mercury" },
+			{ label: "Venus", value: "venus" },
+		]),
+		optionOrder: { A: 1, B: 2 },
+		correctIndices: [1],
+		explanation: "Mercury orbits innermost.",
+		createdAt: "2026-01-01T00:00:00Z",
+	};
+
+	const explainQd: QuestionData = {
+		id: "e-more",
+		kind: "explain",
+		questionType: "check",
+		question: "Explain the chain rule.",
+		mode: "text",
+		options: [],
+		committedAnswer: "SECRET COMMITTED ANSWER",
+		createdAt: "2026-01-01T00:00:00Z",
+	};
+
+	it("buildAnswer omits grading, confidence, explanation, and committed answer on needMoreInfo", () => {
+		const quizAns = buildAnswer(quizQd, { needMoreInfo: true, values: ["mercury"], confidence: 90, thinking: "What does option B mean?" }, "quiz");
+		assert.equal(quizAns.needMoreInfo, true);
+		assert.equal(quizAns.dontKnow, false);
+		assert.deepEqual(quizAns.answers, []);
+		assert.equal(quizAns.correct, undefined);
+		assert.equal(quizAns.correctIndices, undefined);
+		assert.equal(quizAns.explanation, undefined);
+		assert.equal(quizAns.confidence, undefined);
+		assert.deepEqual(quizAns.optionOrder, { A: 1, B: 2 });
+		assert.equal(quizAns.thinking, "What does option B mean?");
+
+		const explainAns = buildAnswer(explainQd, { needMoreInfo: true, text: "Which variable is the outer function?" }, "explain");
+		assert.equal(explainAns.needMoreInfo, true);
+		assert.equal(explainAns.committed, undefined);
+		assert.equal(explainAns.text, undefined);
+		assert.equal(explainAns.thinking, "Which variable is the outer function?");
+	});
+
+	it("compactAnswerForModel emits needMoreInfo without verdict, confidence, or dontKnow", () => {
+		const compact = compactAnswerForModel(
+			buildAnswer(quizQd, { needMoreInfo: true, thinking: "Clarify B", readingThinking: "Note" }, "quiz"),
+		);
+		assert.deepEqual(compact, {
+			kind: "quiz",
+			needMoreInfo: true,
+			optionOrder: { A: 1, B: 2 },
+			thinking: "Clarify B",
+			thinkingWhileReading: "Note",
+		});
+
+		const emptyExplain = compactAnswerForModel(buildAnswer(explainQd, { needMoreInfo: true }, "explain"));
+		assert.deepEqual(emptyExplain, { kind: "explain", needMoreInfo: true });
+	});
+
+	it("toggleOption and toggleOther clear needMoreInfo", () => {
+		const start = { ...emptyDockSelection(), needMoreInfo: true };
+		assert.equal(toggleOption("single-select", start, 0).needMoreInfo, false);
+		assert.equal(toggleOption("multi-select", start, 0).needMoreInfo, false);
+		assert.equal(toggleOther("single-select", start).needMoreInfo, false);
+		assert.equal(toggleOther("multi-select", start).needMoreInfo, false);
+	});
+});

@@ -451,6 +451,11 @@ export interface QuestionAnswerData {
 	options?: { index: number; label: string }[]; // snapshot for rendering
 	optionOrder?: OptionOrder; // snapshot; absent on older or unlettered answers
 	dontKnow: boolean;
+	/** Learner asked for more information / clarification on this question
+	 *  without revealing the answer. Never combined with an answer selection
+	 *  or dontKnow; grading, confidence, explanation, and committed answer
+	 *  are all omitted when true. */
+	needMoreInfo?: boolean;
 	answers: OptionAnswer[];
 	other?: string; // ask: "Other" free text
 	text?: string; // ask/explain: text-mode answer
@@ -489,6 +494,7 @@ export interface ClientQuestion {
 /** What the server passes to the bridge when the learner answers. */
 export interface AnswerRequest {
 	dontKnow?: boolean;
+	needMoreInfo?: boolean;
 	values?: string[]; // option values
 	other?: string; // ask "Other"
 	text?: string; // ask text-mode
@@ -512,9 +518,10 @@ export interface DockSelection {
 	selected: Set<number>;
 	otherSelected: boolean;
 	dontKnow: boolean;
+	needMoreInfo?: boolean;
 }
 
-export const emptyDockSelection = (): DockSelection => ({ selected: new Set(), otherSelected: false, dontKnow: false });
+export const emptyDockSelection = (): DockSelection => ({ selected: new Set(), otherSelected: false, dontKnow: false, needMoreInfo: false });
 
 /** In-memory submission snapshot: survives the question form's optimistic
  * unmount, never written to storage. Indices use the call's stable shuffle. */
@@ -542,9 +549,9 @@ export function toggleOption(mode: SelectMode, sel: DockSelection, idx: number):
 		const selected = new Set(sel.selected);
 		if (selected.has(idx)) selected.delete(idx);
 		else selected.add(idx);
-		return { selected, otherSelected: sel.otherSelected, dontKnow: false };
+		return { selected, otherSelected: sel.otherSelected, dontKnow: false, needMoreInfo: false };
 	}
-	return { selected: new Set([idx]), otherSelected: false, dontKnow: false };
+	return { selected: new Set([idx]), otherSelected: false, dontKnow: false, needMoreInfo: false };
 }
 
 /**
@@ -554,8 +561,8 @@ export function toggleOption(mode: SelectMode, sel: DockSelection, idx: number):
  * nothing.
  */
 export function toggleOther(mode: SelectMode, sel: DockSelection): DockSelection {
-	if (mode === "multi-select") return { ...sel, otherSelected: !sel.otherSelected, dontKnow: false };
-	return { selected: new Set(), otherSelected: true, dontKnow: false };
+	if (mode === "multi-select") return { ...sel, otherSelected: !sel.otherSelected, dontKnow: false, needMoreInfo: false };
+	return { selected: new Set(), otherSelected: true, dontKnow: false, needMoreInfo: false };
 }
 
 // ─── options ────────────────────────────────────────────────────────────────
@@ -744,6 +751,7 @@ function formatOptionRef(options: QuizOption[], index: number): string {
  * agent will see. Quiz answers are graded here; ask answers are not.
  */
 export function buildAnswer(qd: QuestionData, req: AnswerRequest, tool?: string): QuestionAnswerData {
+	const needMoreInfo = req.needMoreInfo === true;
 	const base: QuestionAnswerData = {
 		kind: qd.kind,
 		...(tool ? { tool } : {}),
@@ -751,12 +759,19 @@ export function buildAnswer(qd: QuestionData, req: AnswerRequest, tool?: string)
 		questionText: qd.question,
 		options: qd.options.map((o, i) => ({ index: i + 1, label: o.label })),
 		...(qd.optionOrder ? { optionOrder: qd.optionOrder } : {}),
-		dontKnow: req.dontKnow === true,
+		dontKnow: needMoreInfo ? false : req.dontKnow === true,
+		...(needMoreInfo ? { needMoreInfo: true } : {}),
 		answers: [],
-		thinking: req.thinking?.trim() || undefined,
+		thinking: (needMoreInfo ? (req.thinking?.trim() || req.text?.trim()) : req.thinking?.trim()) || undefined,
 		readingThinking: req.readingThinking?.trim() || undefined,
 		answeredAt: new Date().toISOString(),
 	};
+	if (needMoreInfo) {
+		// Clarification request: no answer selection, no grading, no confidence,
+		// and never attach correctIndices, explanation, or committedAnswer so
+		// the answer stays unrevealed in the transcript and side-chat.
+		return base;
+	}
 	// resolve selected option values → OptionAnswer (in display order)
 	if (req.values && req.values.length > 0) {
 		const byValue = new Map(qd.options.map((o, i) => [o.value, { ...o, index: i + 1 }]));
@@ -818,6 +833,14 @@ export function dismissedAnswer(kind: QuestionKind, questionText: string): Quest
 export function compactAnswerForModel(ad: QuestionAnswerData): Record<string, unknown> {
 	if (ad.dismissed) return { kind: ad.kind, dismissed: true };
 	const out: Record<string, unknown> = { kind: ad.kind };
+	if (ad.needMoreInfo) {
+		out.needMoreInfo = true;
+		if (ad.optionOrder) out.optionOrder = ad.optionOrder;
+		const thinking = ad.thinking ?? ad.note;
+		if (thinking) out.thinking = expandCitationsForModel(thinking);
+		if (ad.readingThinking) out.thinkingWhileReading = expandCitationsForModel(ad.readingThinking);
+		return out;
+	}
 	if (ad.dontKnow) out.dontKnow = true;
 	// Array.isArray: the seam is called with `unknown` answers (test
 	// fixtures, foreign records) — degrade to omission, never crash.
