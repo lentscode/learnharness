@@ -1,7 +1,7 @@
 import type { Stats } from "node:fs";
 import * as fs from "node:fs/promises";
 import { renderOpenPdfPage, type PdfCrop } from "../subagents/headless.ts";
-import { openPdfBytes } from "../subagents/pdf-ops.ts";
+import { openPdfBytes, pdfFileRevision } from "../subagents/pdf-ops.ts";
 import { resolveSourcePath } from "./fs-shared.ts";
 import { learnerImageFromBytes, type LearnerImage } from "./learner-image.ts";
 
@@ -48,13 +48,17 @@ function checkPdfFile(stat: Stats): void {
 
 /** Read at most the checked size plus one byte, including if the file grows
  * during the read. Owned storage can be handed directly to pdfjs. */
-async function readPdfFigureFile(absolute: string, signal?: AbortSignal): Promise<Uint8Array> {
+async function readPdfFigureFile(absolute: string, signal?: AbortSignal, expectedRevision?: string): Promise<Uint8Array> {
 	checkPdfFile(await fs.stat(absolute));
 	signal?.throwIfAborted();
 	const handle = await fs.open(absolute, "r");
 	try {
 		const before = await handle.stat();
 		checkPdfFile(before);
+		const revision = pdfFileRevision(before);
+		if (expectedRevision !== undefined && revision !== expectedRevision) {
+			throw new Error("the PDF changed since it was read; read it again before showing the slide");
+		}
 		signal?.throwIfAborted();
 		const bytes = new Uint8Array(before.size);
 		for (let offset = 0; offset < bytes.length;) {
@@ -70,7 +74,7 @@ async function readPdfFigureFile(absolute: string, signal?: AbortSignal): Promis
 		if (after.size > MAX_PDF_FIGURE_BYTES || (extra && bytes.length === MAX_PDF_FIGURE_BYTES)) {
 			throw new Error(PDF_FIGURE_SIZE_ERROR);
 		}
-		if (extra || after.size !== before.size || after.mtimeMs !== before.mtimeMs) {
+		if (extra || pdfFileRevision(after) !== revision) {
 			throw new Error("the file changed while being read; try again");
 		}
 		return bytes;
@@ -79,13 +83,13 @@ async function readPdfFigureFile(absolute: string, signal?: AbortSignal): Promis
 	}
 }
 
-async function openFigurePdf(rawPath: string, page: number, signal?: AbortSignal) {
+async function openFigurePdf(rawPath: string, page: number, signal?: AbortSignal, expectedRevision?: string) {
 	signal?.throwIfAborted();
 	// Reuse the shared file-access policy, including canonical/symlink checks.
 	const path = resolveSourcePath(rawPath);
 	let opened: Awaited<ReturnType<typeof openPdfBytes>>;
 	try {
-		opened = await openPdfBytes(await readPdfFigureFile(path, signal), signal);
+		opened = await openPdfBytes(await readPdfFigureFile(path, signal, expectedRevision), signal);
 	} catch (error) {
 		signal?.throwIfAborted();
 		const reason = (error as NodeJS.ErrnoException).code === "ENOENT" ? "no such file" : error instanceof Error ? error.message : String(error);
@@ -111,8 +115,8 @@ export async function checkPdfPage(rawPath: string, page: number, signal?: Abort
 
 /** Job-time recheck: open one authorized byte snapshot. The preview and
  * every crop use that same page, never re-open the path. */
-export async function loadPdfFigureSource(rawPath: string, page: number, signal?: AbortSignal): Promise<PdfFigureSource> {
-	const { path, doc, close } = await openFigurePdf(rawPath, page, signal);
+export async function loadPdfFigureSource(rawPath: string, page: number, signal?: AbortSignal, expectedRevision?: string): Promise<PdfFigureSource> {
+	const { path, doc, close } = await openFigurePdf(rawPath, page, signal, expectedRevision);
 	try {
 		signal?.throwIfAborted();
 		const sourcePage = await doc.getPage(page);

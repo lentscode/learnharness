@@ -28,6 +28,9 @@ interface ToolCallPart {
  *  the expanded view when present in the output). */
 function headlineArg(tool: string, input: unknown): string {
 	const inp = (input ?? {}) as Record<string, unknown>;
+	if (tool === "show_pdf_page" && typeof inp.path === "string" && typeof inp.page === "number") {
+		return `${inp.path}, page ${inp.page}`;
+	}
 	if (tool === "read" || tool === "ls" || tool === "show_image") {
 		const p = typeof inp.path === "string" && inp.path.length > 0 ? inp.path : "~";
 		return p;

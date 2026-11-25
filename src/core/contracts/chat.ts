@@ -332,11 +332,13 @@ export interface ImageSnapshot {
 	height: number;
 }
 
-/** The show_image record payload. Its session-owned snapshot is never model-facing. */
+/** The inline image record payload. Its session-owned snapshot stays with the lesson. */
 export interface ShowImageDetails {
-	/** The absolute path the image was read from. */
+	/** The source file path. */
 	path: string;
 	caption?: string;
+	/** Present for a whole PDF page, counting from 1. */
+	page?: number;
 	mimeType: "image/png" | "image/jpeg";
 	/** SHA-256 identity in ChatRecord.imageSnapshots. */
 	snapshotId: string;

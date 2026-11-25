@@ -4,7 +4,7 @@ import { DownloadIcon, MaximizeIcon } from "lucide-react";
 import { useSessionMermaid } from "@/components/session-overlay";
 import { downloadFile } from "@/components/artifacts/download";
 import { ToolCallCard } from "@/components/artifacts/tool-call-card";
-import type { ArtifactPartProps, ImageSnapshot, ShowImageDetails } from "@/src/core";
+import { filePathLabel, type ArtifactPartProps, type ImageSnapshot, type ShowImageDetails } from "@/src/core";
 import { useImageSnapshot } from "./use-image-snapshot";
 
 /**
@@ -15,7 +15,7 @@ import { useImageSnapshot } from "./use-image-snapshot";
  * still-running call keeps the quiet tool-call card.
  */
 
-function isShowImageDetails(value: unknown): value is ShowImageDetails {
+function isShowImageDetails(value: unknown, needsPage: boolean): value is ShowImageDetails {
 	const v = value as Partial<ShowImageDetails> | null | undefined;
 	return (
 		typeof v?.snapshotId === "string" &&
@@ -23,20 +23,17 @@ function isShowImageDetails(value: unknown): value is ShowImageDetails {
 		(v.mimeType === "image/png" || v.mimeType === "image/jpeg") &&
 		typeof v.path === "string" &&
 		typeof v.width === "number" &&
-		typeof v.height === "number"
+		typeof v.height === "number" &&
+		(!needsPage || (typeof v.page === "number" && Number.isSafeInteger(v.page) && v.page > 0))
 	);
-}
-
-/** The learner's file name, without its directory. Pure. */
-function baseName(path: string): string {
-	return path.split(/[\\/]/).pop() || "image";
 }
 
 /** The download name: the file's stem with the STORED format's extension
  *  (a converted or shrunk image is no longer the original bytes). Pure. */
-export function imageDownloadName(image: Pick<ShowImageDetails, "path" | "mimeType">): string {
-	const stem = baseName(image.path).replace(/\.[^.]*$/, "") || "image";
-	return `${stem}.${image.mimeType === "image/png" ? "png" : "jpg"}`;
+export function imageDownloadName(image: Pick<ShowImageDetails, "path" | "mimeType" | "page">): string {
+	const stem = filePathLabel(image.path).replace(/\.[^.]*$/, "") || "image";
+	const pageSuffix = image.page === undefined ? "" : `-page-${image.page}`;
+	return `${stem}${pageSuffix}.${image.mimeType === "image/png" ? "png" : "jpg"}`;
 }
 
 /** The image as a standalone SVG document — the shape the fullscreen
@@ -49,7 +46,7 @@ export function imageSvgDocument(image: ImageSnapshot): string {
 export function ImageCard({ part }: ArtifactPartProps) {
 	if (part.state !== "output-available") return <ToolCallCard part={part} />;
 	const image = part.output;
-	if (!isShowImageDetails(image)) {
+	if (!isShowImageDetails(image, part.type === "tool-show_pdf_page")) {
 		return (
 			<div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
 				Image shown, but it could not be displayed.
@@ -62,12 +59,15 @@ export function ImageCard({ part }: ArtifactPartProps) {
 function StoredImageCard({ details }: { details: ShowImageDetails }) {
 	const { image, failed } = useImageSnapshot(details.snapshotId);
 	if (!image) return <div className="my-4 text-sm text-muted-foreground" role="status">{failed ? "Image snapshot could not be loaded." : "Loading image…"}</div>;
-	return <ImagePresentation image={{ ...image, path: details.path, caption: details.caption }} />;
+	return <ImagePresentation image={{ ...image, path: details.path, caption: details.caption, page: details.page }} />;
 }
 
 /** Resolved presentation shared by inline display, download and fullscreen. */
-export function ImagePresentation({ image }: { image: ImageSnapshot & Pick<ShowImageDetails, "path" | "caption"> }) {
+export function ImagePresentation({ image }: { image: ImageSnapshot & Pick<ShowImageDetails, "path" | "caption" | "page"> }) {
 	const overlay = useSessionMermaid();
+	const slide = image.page !== undefined;
+	const fileName = filePathLabel(image.path) || "image";
+	const caption = slide ? `${fileName}, page ${image.page}` : image.caption;
 	const save = () => {
 		const bytes = Uint8Array.from(atob(image.data), (c) => c.charCodeAt(0));
 		downloadFile(imageDownloadName(image), bytes, image.mimeType);
@@ -82,7 +82,7 @@ export function ImagePresentation({ image }: { image: ImageSnapshot & Pick<ShowI
 				{/* eslint-disable-next-line @next/next/no-img-element */}
 				<img
 					src={`data:${image.mimeType};base64,${image.data}`}
-					alt={image.caption ?? baseName(image.path)}
+					alt={caption ?? fileName}
 					width={image.width}
 					height={image.height}
 					className="block h-auto w-auto max-h-[60vh] max-w-full"
@@ -91,10 +91,10 @@ export function ImagePresentation({ image }: { image: ImageSnapshot & Pick<ShowI
 			</div>
 			<figcaption className="mt-2 flex w-0 min-w-full items-start justify-between gap-2">
 				<div className="flex min-w-0 items-baseline gap-2">
-					<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">Image</span>
-					{image.caption && (
+					<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">{slide ? "Slide" : "Image"}</span>
+					{caption && (
 						<span className="text-sm text-muted-foreground" data-testid="image-caption">
-							{image.caption}
+							{caption}
 						</span>
 					)}
 				</div>

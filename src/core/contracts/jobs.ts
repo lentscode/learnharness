@@ -275,6 +275,8 @@ export interface PdfToolInput {
 export interface PdfResult {
 	path: string;
 	question: string;
+	/** The local file revision checked by the reader, when available. */
+	sourceRevision?: string;
 	/** The distilled brief. Page citations inside the text point at
 	 *  pagesConsulted. Failure shape: /^PDF failed:/i (mirrors research). */
 	brief: string;

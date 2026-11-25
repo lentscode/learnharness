@@ -1,4 +1,5 @@
 import * as fs from "node:fs/promises";
+import type { Stats } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { documentToMarkdown, type PdfPage } from "./pdf-markdown.ts";
@@ -57,6 +58,11 @@ export function standardFontsDir(): string {
 
 async function openDocument(filePath: string) {
 	return openPdfBytes(new Uint8Array(await fs.readFile(filePath)));
+}
+
+/** Matches the local file revision across the read and display operations. */
+export function pdfFileRevision(stat: Stats): string {
+	return [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(":");
 }
 
 type PdfLoadingTask = Pick<import("pdfjs-dist/legacy/build/pdf.mjs").PDFDocumentLoadingTask, "promise" | "destroy">;

@@ -10,7 +10,8 @@ import { backgroundCaptureStream, createBackgroundCapture, type BackgroundCaptur
 import { createWorkerRequestScope } from "../worker-request-admission.ts";
 import type { PdfResult, PdfToolInput } from "../../core/contracts.ts";
 import { getHeadless, type HeadlessApi } from "./headless.ts";
-import { pdfExtract, pdfInfo, pdfProbe, pdfSearch, type PdfSearchHit } from "./pdf-ops.ts";
+import * as fs from "node:fs/promises";
+import { pdfExtract, pdfFileRevision, pdfInfo, pdfProbe, pdfSearch, type PdfSearchHit } from "./pdf-ops.ts";
 
 /**
  * The pdf-reader sub-agent (sources v0, 2026-09): reads a learner-provided
@@ -170,16 +171,14 @@ export async function runPdfReaderAgent(
 ): Promise<PdfResult> {
 	const maxIterations = opts.maxIterations;
 	let pdfPath = input.path;
-	let openError: string | null;
+	let sourceRevision: string;
 	// Source denial is an ordinary upfront PDF failure, before parsing,
 	// rendering or any model request (including direct reader invocations).
 	try {
 		pdfPath = resolveSourcePath(input.path);
-		openError = await probeReadable(pdfPath);
+		sourceRevision = await probeReadable(pdfPath);
 	} catch (err) {
-		openError = err instanceof Error ? err.message : String(err);
-	}
-	if (openError) {
+		const openError = err instanceof Error ? err.message : String(err);
 		return { path: pdfPath, question: input.question, brief: `PDF failed: ${openError}`, pagesRead: [], pagesConsulted: [] };
 	}
 	const headless = opts.headless ?? getHeadless();
@@ -253,7 +252,10 @@ export async function runPdfReaderAgent(
 					];
 					continue;
 				}
-				return { path: pdfPath, question: input.question, brief: finalText || "(no brief text)", pagesRead: [...read].sort((a, b) => a - b), pagesConsulted: [...consulted].sort((a, b) => a - b) };
+				if (pdfFileRevision(await fs.stat(pdfPath)) !== sourceRevision) {
+					return { path: pdfPath, question: input.question, brief: "PDF failed: the file changed during reading. Read it again.", pagesRead: [], pagesConsulted: [] };
+				}
+				return { path: pdfPath, question: input.question, sourceRevision, brief: finalText || "(no brief text)", pagesRead: [...read].sort((a, b) => a - b), pagesConsulted: [...consulted].sort((a, b) => a - b) };
 			}
 
 			const toolResults: ToolResultMessage[] = [];
@@ -404,18 +406,12 @@ function numOr(v: unknown, dflt: number): number {
 }
 
 /** Cheap upfront readability probe — real parsing happens inside the tools. */
-async function probeReadable(pdfPath: string): Promise<string | null> {
-	try {
-		const fs = await import("node:fs/promises");
-		const stat = await fs.stat(pdfPath);
-		if (!stat.isFile()) return "not a regular file";
-		if (stat.size === 0) return "file is empty";
-		// parse probe: pdfProbe throws pdfjs's precise error for garbage files
-		await pdfProbe(pdfPath);
-		return null;
-	} catch (err) {
-		return err instanceof Error ? err.message : String(err);
-	}
+async function probeReadable(pdfPath: string): Promise<string> {
+	const stat = await fs.stat(pdfPath);
+	if (!stat.isFile()) throw new Error("not a regular file");
+	if (stat.size === 0) throw new Error("file is empty");
+	await pdfProbe(pdfPath);
+	return pdfFileRevision(stat);
 }
 
 /** One raw model call (no agent loop): the visual-maker's streamOnce,

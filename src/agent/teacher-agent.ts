@@ -23,7 +23,8 @@ import { createReadTool, readTool } from "./tools/read.ts";
 import { quizInputObject, quizInputProblems } from "../core/question-core.ts";
 import { QUESTION_TOOLS, TOGGLEABLE_TOOLS, type EnabledTools } from "../core/pending.ts";
 import type { PluginToolContext } from "../core/plugins.ts";
-import { toLlmMessages, nativeInputCause, PRACTICE_PROBLEM_TOOL } from "../core/native-messages.ts";
+import { toLlmMessages, nativeInputCause, PRACTICE_PROBLEM_TOOL, type LhMessage } from "../core/native-messages.ts";
+import { attachedSlideSourcePrompt } from "../core/slide-sources.ts";
 import type { ChatGPTRequestCycle } from "./chatgpt-request-cycle.ts";
 import { usageWasAdmitted } from "./subscription-request-cycle.ts";
 import { PluginQuestionLedger, type NativePluginQuestionContribution } from "./plugin-question-tools.ts";
@@ -60,7 +61,7 @@ export type AgentKind = "prober" | "teacher" | "practice";
  * New builtin names must join this catalog; actual turn tools are reserved too. */
 export const CONVERSATION_TOOL_NAMES = Object.freeze([
 	...QUESTION_TOOLS, ...TOGGLEABLE_TOOLS, "probe_done", "read", "ls", "find", "grep",
-	"plan_init", "list_sessions", "list_propositions", "problem", "conclude", sendToUserTool.name,
+	"plan_init", "list_sessions", "list_propositions", "problem", "conclude", "show_pdf_page", sendToUserTool.name,
 ] as const);
 
 // P2 (2026-09-19): segment discovery + override resolution live in ONE
@@ -214,7 +215,11 @@ function baseAgentOptions(kind: AgentKind, opts: AgentBuildOptions, tools: Agent
 	const composedPrompt = opts.promptSwitches
 		? composeInstructions(kind, opts.promptSwitches)
 		: composedInstructions[kind]!;
-	const builtinPrompt = narrationGuard ? `${composedPrompt}\n\n---\n\n${SEND_TO_USER_DELIVERY_RULE}` : composedPrompt;
+	const builtinPrompt = [
+		composedPrompt,
+		kind === "teacher" ? attachedSlideSourcePrompt((opts.messages ?? []) as readonly LhMessage[]) : "",
+		narrationGuard ? SEND_TO_USER_DELIVERY_RULE : "",
+	].filter(Boolean).join("\n\n---\n\n");
 	// Bind native read and preserve the kind/model-aware Claude output gate
 	// before resolving additive plugins. Explicit registries remain caller-owned.
 	const builtinTools = [
