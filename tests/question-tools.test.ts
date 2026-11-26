@@ -290,6 +290,10 @@ describe("tool toggles (core/pending.ts + factories)", () => {
 		// free-recall — explain in, quiz out, exactly one quizzing tool.
 		const free = createProberTools(ctx, { explain: true });
 		assert.deepEqual(Object.keys(free).sort(), ["ask_user_question", "find", "grep", "ls", "pdf", "probe_done", "read", "recall", "research"]);
+		// Combined mode ("both"): arms both probe (MC) and recall (free recall);
+		// mechanics keys cannot drop either tool.
+		const both = createProberTools(ctx, { probe: false, recall: false }, "both");
+		assert.deepEqual(Object.keys(both).sort(), ["ask_user_question", "find", "grep", "ls", "pdf", "probe", "probe_done", "read", "recall", "research"]);
 		assert.ok(createProberTools(ctx, { probe_done: false }).probe_done, "probe_done always-on");
 	});
 
@@ -322,6 +326,15 @@ describe("tool toggles (core/pending.ts + factories)", () => {
 			Object.keys(createTeacherTools(ctx, { explain: true, research: false })).sort(),
 			freeFull.filter((t) => t !== "research"),
 			"mechanics and plain toggles compose",
+		);
+		// Combined mode ("both"): arms BOTH quiz (MC) and explain (free recall),
+		// and composes cleanly with toggleable job tools.
+		const bothFull = ["ask_user_question", "demo", "explain", "find", "grep", "ls", "pdf", "plan_init", "quiz", "read", "research", "show_image", "visual"];
+		assert.deepEqual(Object.keys(createTeacherTools(ctx, undefined, "both")).sort(), bothFull);
+		assert.deepEqual(
+			Object.keys(createTeacherTools(ctx, { quiz: false, explain: false, research: false }, "both")).sort(),
+			bothFull.filter((t) => t !== "research"),
+			"both mode keeps quiz+explain even if mechanics keys are false, while honoring plain toggles",
 		);
 	});
 });

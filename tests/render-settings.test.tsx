@@ -234,6 +234,26 @@ describe("AgentSection (thin SSR)", () => {
 		assert.ok(ollama.includes("Ollama"), "an Ollama pin reads by its label");
 	});
 
+	it("the quizzing segmented control renders Multiple choice / Free recall / Both with default choice and legacy fallback", () => {
+		const render = (agent: Parameters<typeof AgentSection>[0]["agent"]) => renderToStaticMarkup(
+			<AgentSection agent={agent} models={undefined} graph={undefined} onSectionChange={() => true} onModelsChange={() => {}} />,
+		);
+		const unset = render(undefined);
+		assert.ok(tagOf(unset, "quiz-mechanics-choice").includes('aria-checked="true"'));
+		assert.ok(tagOf(unset, "quiz-mechanics-free").includes('aria-checked="false"'));
+		assert.ok(tagOf(unset, "quiz-mechanics-both").includes('aria-checked="false"'));
+
+		const legacyFree = render({ tools: { explain: true } });
+		assert.ok(tagOf(legacyFree, "quiz-mechanics-choice").includes('aria-checked="false"'));
+		assert.ok(tagOf(legacyFree, "quiz-mechanics-free").includes('aria-checked="true"'));
+		assert.ok(tagOf(legacyFree, "quiz-mechanics-both").includes('aria-checked="false"'));
+
+		const both = render({ quizMechanics: "both" });
+		assert.ok(tagOf(both, "quiz-mechanics-choice").includes('aria-checked="false"'));
+		assert.ok(tagOf(both, "quiz-mechanics-free").includes('aria-checked="false"'));
+		assert.ok(tagOf(both, "quiz-mechanics-both").includes('aria-checked="true"'));
+	});
+
 	it("the prober graph-tools row: FIRST in the Tools group, default ON, its own key (wave 7)", () => {
 		// Default state: graph on, graphTools absent → ON, the describing
 		// hint rides (the search-row hint discipline).

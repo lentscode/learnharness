@@ -236,6 +236,17 @@ describe("sanitizeUserSettings", () => {
 		assert.equal(badEnabled?.agent?.graphTools, undefined);
 	});
 
+	it("quizMechanics survives valid values (choice/free/both); invalid values drop", () => {
+		for (const mechanics of ["choice", "free", "both"] as const) {
+			const out = sanitizeUserSettings({ version: 1, agent: { quizMechanics: mechanics } });
+			assert.equal(out?.agent?.quizMechanics, mechanics);
+		}
+		for (const bad of ["mixed", "", null, true, 1, {}]) {
+			const out = sanitizeUserSettings({ version: 1, agent: { quizMechanics: bad } });
+			assert.equal(out?.agent?.quizMechanics, undefined, String(bad));
+		}
+	});
+
 	it("partial maps: booleans survive, non-boolean entries drop individually", () => {
 		const out = sanitizeUserSettings({ agent: { tools: { quiz: false, demo: true, visual: "x" } } });
 		assert.ok(out);

@@ -1,6 +1,13 @@
 ## The question tools
 
-Two instruments. The quiz tool (its exact name depends on the quizzing mechanic the learner chose — multiple choice or free recall) for questions with a known correct answer; `ask_user_question` for everything else. Each tool's own description carries its mechanics — read it before first use. What the questions should BE is here.
+Two instruments. The quizzing tool(s) (multiple choice, free recall, or both — depending on the quizzing mechanic the learner chose) for questions with a known correct answer; `ask_user_question` for everything else. Each tool's own description carries its mechanics — read it before first use. What the questions should BE is here.
+
+### Choosing between multiple choice and free recall
+
+When both quizzing tools are available (`probe` and `recall` while probing; `quiz` and `explain` while teaching), choose per question by pedagogical fit and mix both naturally rather than defaulting to only one:
+
+- **Multiple choice** (`probe` / `quiz`): reach for this when distinguishing specific competing mental models, running a quick check, or choosing among results of calculations or derivations of equations — wherever believable distractors diagnose the exact misconception without giving the answer away.
+- **Free recall** (`recall` / `explain`): reach for this when explaining complex concepts, having the learner articulate a mechanism or reasoning chain in their own words, or whenever listing options would spoil the question.
 
 ### Building graded questions — the invariant craft
 

@@ -28,7 +28,7 @@ import type {
 	ModelSlot,
 	RoleModelOverride,
 } from "../core/settings.ts";
-import { BACKGROUND_MODEL_ROLES, CACHE_RETENTIONS, COMPACTION_THRESHOLD_FLOOR, CUSTOM_MODEL_PIN_FLOOR, EXTRACTION_CHUNK_TOKENS_FLOOR, isTranscriptMaxWidth, MODEL_SLOTS, TRANSCRIPT_WIDTH_MAX_REM, TRANSCRIPT_WIDTH_MIN_REM } from "../core/settings.ts";
+import { BACKGROUND_MODEL_ROLES, CACHE_RETENTIONS, COMPACTION_THRESHOLD_FLOOR, CUSTOM_MODEL_PIN_FLOOR, EXTRACTION_CHUNK_TOKENS_FLOOR, isQuizMechanics, isTranscriptMaxWidth, MODEL_SLOTS, QUIZ_MECHANICS, TRANSCRIPT_WIDTH_MAX_REM, TRANSCRIPT_WIDTH_MIN_REM } from "../core/settings.ts";
 import { WRITABLE_TOOL_KEYS } from "../core/pending.ts";
 import { isSearchEngineId, SEARCH_ENGINES } from "../core/search.ts";
 import { isDictationLanguage } from "../core/dictation.ts";
@@ -175,6 +175,12 @@ export function parseAgentSettingsBody(body: unknown): SettingsBodyResult<AgentS
 			if (Object.keys(override.override).length) parsed[role as BackgroundModelRole] = override.override;
 		}
 		if (Object.keys(parsed).length) settings.models = parsed;
+	}
+	if (raw.quizMechanics !== undefined) {
+		if (!isQuizMechanics(raw.quizMechanics)) {
+			return { ok: false, error: `quizMechanics must be ${QUIZ_MECHANICS.map((m) => `"${m}"`).join(", ")}` };
+		}
+		settings.quizMechanics = raw.quizMechanics;
 	}
 	const tools = parseBooleanMap(raw.tools, "tools");
 	if (tools.error) return { ok: false, error: tools.error };

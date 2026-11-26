@@ -115,6 +115,18 @@ describe("parseAgentSettingsBody", () => {
 		assert.equal(parseAgentSettingsBody({ graphTools: null }).ok, false);
 	});
 
+	it("quizMechanics: accepts choice, free, and both; rejects unknown or non-string values", () => {
+		for (const mechanics of ["choice", "free", "both"] as const) {
+			const ok = parseAgentSettingsBody({ quizMechanics: mechanics });
+			assert.ok(ok.ok);
+			assert.equal(ok.settings.quizMechanics, mechanics);
+		}
+		for (const bad of ["mixed", "", null, true, 2, {}]) {
+			const res = parseAgentSettingsBody({ quizMechanics: bad });
+			assert.equal(res.ok, false, String(bad));
+		}
+	});
+
 	it("an empty {} agent section parses to {} (replace-whole clear)", () => {
 		const r = parseAgentSettingsBody({});
 		assert.ok(r.ok);
