@@ -42,6 +42,7 @@ import {
 	type GraphSettings,
 	type ModelSlot,
 	type ModelSlotName,
+	type QuizMechanics,
 	type RoleModelOverride,
 	type UserSettings,
 } from "./settings.ts";
@@ -77,6 +78,8 @@ export interface EffectiveSettings {
 	agent: {
 		workerRequestConcurrency: number;
 		models: Record<BackgroundModelRole, EffectiveModelSpec | undefined>;
+		/** Resolved quizzing mechanic for Prober and Teacher ("choice" | "free" | "both"). */
+		quizMechanics: QuizMechanics;
 		/** Delta map as stored — consumers resolve absent key → enabled. */
 		tools: Record<string, boolean>;
 		/** Delta map as stored — absent key → override off. */
@@ -178,6 +181,14 @@ export function resolveModelSpec(
 	};
 }
 
+/** Resolve the active quizzing mechanic: explicit `agent.quizMechanics`
+ *  wins; absent falls back to legacy `agent.tools.explain === true` ("free")
+ *  and otherwise the factory default ("choice"). */
+export function resolveQuizMechanics(agent?: Pick<AgentSettings, "quizMechanics" | "tools">): QuizMechanics {
+	if (agent?.quizMechanics) return agent.quizMechanics;
+	return agent?.tools?.explain === true ? "free" : "choice";
+}
+
 /** Resolve the whole record. `record` may be null (first boot) — every
  *  factory-defaulted field lands on its default; MODEL fields resolve to
  *  null/undefined when unset (no factory pins exist — BYOK all the way
@@ -204,6 +215,7 @@ export function resolveSettings(record: UserSettings | null): EffectiveSettings 
 		agent: {
 			workerRequestConcurrency: agent.workerRequestConcurrency ?? FACTORY_SETTINGS.agent.workerRequestConcurrency,
 			models,
+			quizMechanics: resolveQuizMechanics(agent),
 			tools: agent.tools ?? {},
 			prompts: agent.prompts ?? {},
 			search: agent.search ?? {},

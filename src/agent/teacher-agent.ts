@@ -22,6 +22,7 @@ import { makeNarrationGuard, narrationGuardApplies, SEND_TO_USER_DELIVERY_RULE }
 import { createReadTool, readTool } from "./tools/read.ts";
 import { quizInputObject, quizInputProblems } from "../core/question-core.ts";
 import { QUESTION_TOOLS, TOGGLEABLE_TOOLS, type EnabledTools } from "../core/pending.ts";
+import type { QuizMechanics } from "../core/settings.ts";
 import type { PluginToolContext } from "../core/plugins.ts";
 import { toLlmMessages, nativeInputCause, PRACTICE_PROBLEM_TOOL } from "../core/native-messages.ts";
 import type { ChatGPTRequestCycle } from "./chatgpt-request-cycle.ts";
@@ -142,6 +143,8 @@ export interface AgentBuildOptions {
 	 *  THE DEFINITIVE toggleable set is TOGGLEABLE_TOOLS (job tools only);
 	 *  the filtering is generic, but writes validate against the list). */
 	toolToggles?: EnabledTools;
+	/** Resolved quizzing mechanic for Prober and Teacher ("choice" | "free" | "both"). */
+	quizMechanics?: QuizMechanics;
 	/** Per-segment system-prompt override SWITCHES (the settings record's
 	 *  agent.prompts map, absent key = off — same keys the settings routes
 	 *  and effectivePromptSegments use). Provided → the prompt composes
@@ -336,7 +339,7 @@ function baseAgentOptions(kind: AgentKind, opts: AgentBuildOptions, tools: Agent
  * handler keys teacher construction on.
  */
 export function createProberAgent(ctx: ProberToolContext, opts: AgentBuildOptions = {}) {
-	return baseAgentOptions("prober", opts, Object.values(createProberTools(ctx, opts.toolToggles)));
+	return baseAgentOptions("prober", opts, Object.values(createProberTools(ctx, opts.toolToggles, opts.quizMechanics)));
 }
 
 /**
@@ -352,7 +355,7 @@ export function createTeacherAgent(
 	ctx?: TeacherToolContext,
 	opts: AgentBuildOptions = {},
 ) {
-	const tools = opts.tools ?? (ctx ? createTeacherTools(ctx, opts.toolToggles) : bareQuestionTools());
+	const tools = opts.tools ?? (ctx ? createTeacherTools(ctx, opts.toolToggles, opts.quizMechanics) : bareQuestionTools());
 	return baseAgentOptions("teacher", opts, Object.values(tools), ctx
 		? nodeId => ctx.chatStore.getChat(ctx.chatId)?.tree?.nodes.some(node => node.id === nodeId) ?? false
 		: undefined);

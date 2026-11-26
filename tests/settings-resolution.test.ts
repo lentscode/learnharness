@@ -15,6 +15,7 @@ import {
 	renderingEnabled,
 	resolveConversationSpec,
 	resolveModelSpec,
+	resolveQuizMechanics,
 	resolveRoleSpec,
 	resolveSettings,
 	resolveSideQuestionSpec,
@@ -34,6 +35,22 @@ describe("resolveSettings", () => {
 			const record = sanitizeUserSettings({ version: 1, agent: { workerRequestConcurrency: value } });
 			assert.equal(resolveSettings(record).agent.workerRequestConcurrency, 8);
 		}
+	});
+
+	it("quizMechanics defaults to choice, honors legacy tools.explain, and lets explicit quizMechanics win", () => {
+		assert.equal(resolveSettings(null).agent.quizMechanics, "choice");
+		assert.equal(resolveQuizMechanics(undefined), "choice");
+		assert.equal(resolveSettings({ version: 1, agent: { tools: { explain: true } } }).agent.quizMechanics, "free");
+		assert.equal(resolveSettings({ version: 1, agent: { tools: { explain: false } } }).agent.quizMechanics, "choice");
+		assert.equal(resolveSettings({ version: 1, agent: { quizMechanics: "both" } }).agent.quizMechanics, "both");
+		assert.equal(
+			resolveSettings({ version: 1, agent: { quizMechanics: "both", tools: { explain: false } } }).agent.quizMechanics,
+			"both",
+		);
+		assert.equal(
+			resolveSettings({ version: 1, agent: { quizMechanics: "choice", tools: { explain: true } } }).agent.quizMechanics,
+			"choice",
+		);
 	});
 
 	it("null record (first boot): non-model knobs land on factory defaults; every model view is EMPTY", () => {

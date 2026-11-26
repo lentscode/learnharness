@@ -347,6 +347,17 @@ export interface DictationSettings {
 	language?: DictationLanguage;
 }
 
+/** Quizzing mechanics available to both Prober and Teacher:
+ *  - "choice": multiple choice only (`probe` / `quiz`)
+ *  - "free": free recall only (`recall` / `explain`)
+ *  - "both": both multiple choice and free recall armed together */
+export const QUIZ_MECHANICS = ["choice", "free", "both"] as const;
+export type QuizMechanics = (typeof QUIZ_MECHANICS)[number];
+
+export function isQuizMechanics(value: unknown): value is QuizMechanics {
+	return typeof value === "string" && (QUIZ_MECHANICS as readonly string[]).includes(value);
+}
+
 /** Agent settings — everything about the non-conversation machinery. */
 export interface AgentSettings {
 	/** Maximum simultaneous background-worker model requests (default 8).
@@ -355,6 +366,9 @@ export interface AgentSettings {
 	workerRequestConcurrency?: number;
 	/** Background-role model/thinking overrides (absent role = config pin). */
 	models?: Partial<Record<BackgroundModelRole, RoleModelOverride>>;
+	/** Quizzing mechanic for both Prober and Teacher. Absent falls back to
+	 *  legacy `tools.explain === true ? "free" : "choice"`. */
+	quizMechanics?: QuizMechanics;
 	/** Tool toggles keyed by tool id (absent key = enabled). User-level
 	 *  only — no per-chat override (owner decision 2026-09-19). */
 	tools?: Record<string, boolean>;
@@ -771,6 +785,7 @@ function sanitizeAgent(raw: Record<string, unknown>): AgentSettings {
 		}
 		if (Object.keys(models).length) out.models = models;
 	}
+	if (isQuizMechanics(raw.quizMechanics)) out.quizMechanics = raw.quizMechanics;
 	const tools = sanitizeBooleanMap(raw.tools);
 	if (tools) out.tools = tools;
 	const prompts = sanitizeBooleanMap(raw.prompts);

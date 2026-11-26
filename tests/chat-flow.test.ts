@@ -1375,6 +1375,82 @@ it("explain tool call persists as a pending part; the free-text answer reveals t
 	assert.equal(danglingQuestionOf(saved2.messages), null, "no pending question remains");
 });
 
+it("combined quizzing mode ('both') arms quiz and explain together so one session can mix both", async () => {
+	const QUIZ_INPUT = {
+		type: "check" as const,
+		nodeId: "planet-order",
+		question: "Which planet orbits closest to the Sun?",
+		options: [
+			{ label: "Mercury", value: "mercury" },
+			{ label: "Venus", value: "venus" },
+		],
+		explanation: "Mercury has the smallest semi-major axis.",
+		correctAnswer: "mercury",
+	};
+	const EXPLAIN_INPUT = {
+		type: "check" as const,
+		nodeId: "planet-order",
+		question: "Explain why Mercury is hard to observe from Earth.",
+		correctAnswer: "Its small angular separation from the Sun keeps it close to the horizon around twilight.",
+	};
+	const { engine } = scriptedTeacher(() => [
+		() => fauxAssistantMessage([fauxToolCall("quiz", QUIZ_INPUT, { id: "call-mc" })], { stopReason: "toolUse" }),
+		() => fauxAssistantMessage([fauxToolCall("explain", EXPLAIN_INPUT, { id: "call-fr" })], { stopReason: "toolUse" }),
+		() => fauxAssistantMessage([fauxText("Both checks landed cleanly.")]),
+	]);
+	const chat = createConfiguredChat("Test: combined quizzing mode");
+	createdChats.push(chat.id);
+
+	const tools = createTeacherTools(
+		{ chatId: chat.id, chatStore, jobStore, spawn: () => {} },
+		undefined,
+		"both",
+	);
+	assert.ok(tools.quiz && tools.explain, "both quiz and explain armed together");
+
+	const factory: Parameters<typeof handleChatRequest>[1] = (opts) =>
+		createTeacherAgent(undefined, { engine, messages: opts.messages, tools });
+
+	await drainTurn(post(chat.id, { type: "text", text: "teach me the solar system" }), factory);
+	assert.equal(danglingQuestionOf(chatStore.getChat(chat.id)!.messages)?.tool, "quiz");
+
+	const mcQd: QuestionData = {
+		id: "call-mc",
+		kind: "quiz",
+		question: QUIZ_INPUT.question,
+		mode: "single-select",
+		options: QUIZ_INPUT.options,
+		correctIndices: [1],
+		explanation: QUIZ_INPUT.explanation,
+		createdAt: new Date().toISOString(),
+	};
+	await drainTurn(
+		post(chat.id, { type: "answer", toolCallId: "call-mc", answer: buildAnswer(mcQd, { values: ["mercury"] }, "quiz") }),
+		factory,
+	);
+	assert.equal(danglingQuestionOf(chatStore.getChat(chat.id)!.messages)?.tool, "explain");
+
+	const frQd: QuestionData = {
+		id: "call-fr",
+		kind: "explain",
+		question: EXPLAIN_INPUT.question,
+		mode: "text",
+		options: [],
+		committedAnswer: EXPLAIN_INPUT.correctAnswer,
+		createdAt: new Date().toISOString(),
+	};
+	await drainTurn(
+		post(chat.id, { type: "answer", toolCallId: "call-fr", answer: buildAnswer(frQd, { text: "It stays right next to the Sun in our sky." }, "explain") }),
+		factory,
+	);
+	const saved = chatStore.getChat(chat.id)!;
+	assert.equal(danglingQuestionOf(saved.messages), null);
+	const view = projectView(saved.messages);
+	const allParts = view.flatMap((m) => m.parts);
+	assert.ok(allParts.some((p) => p.type === "tool-quiz" && (p as { state?: string }).state === "output-available"));
+	assert.ok(allParts.some((p) => p.type === "tool-explain" && (p as { state?: string }).state === "output-available"));
+});
+
 // ─── the silent dismissal (owner design 2026-10-03, "A2") ──────────────────
 
 describe("the silent dismissal (A2)", () => {

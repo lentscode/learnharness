@@ -376,9 +376,10 @@ describe("practice prompt composition (own directory + the formatting appendix)"
 	it("the prober brackets the learner's edge without a rigid question sequence or forced miss", () => {
 		const prober = composeInstructions("prober");
 		assert.match(prober, /A single question can reveal several strands/);
-		assert.match(prober, /the available quizzing tool to measure understanding/);
+		assert.match(prober, /the available quizzing tool\(s\) to measure understanding/);
 		assert.match(prober, /A topic request tells you what the learner wants to learn, not what they already understand/);
 		assert.doesNotMatch(prober, /`probe` or `recall`|The available format is not a reason to skip probing/);
+		assert.match(prober, /Choosing between multiple choice and free recall/);
 		assert.match(prober, /reasoning is your primary evidence, whether it comes in a thinking field or in the answer text/);
 		assert.match(prober, /Prefer a short set of meaningful multiple-choice options/);
 		assert.match(prober, /Use the logic of binary search/);

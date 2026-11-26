@@ -447,15 +447,21 @@ describe("sectionedSegments — actual per-agent prompt membership", () => {
 // ─── the quizzing-mechanics segmented control (owner 2026-09-27) ───────────
 
 describe("composeQuizMechanics (the segmented control's write)", () => {
-	it("free recall writes explain:true; multiple choice writes explain:false — nothing else moves", () => {
-		const before: AgentSettings = { tools: { research: false }, prompts: { teacher: true } } as AgentSettings;
+	it("writes quizMechanics (choice/free/both), clears legacy tools.explain, and preserves other fields", () => {
+		const before: AgentSettings = { tools: { research: false, explain: true }, prompts: { teacher: true } } as AgentSettings;
 		const free = composeQuizMechanics(before, "free");
-		assert.equal(free.tools?.explain, true);
+		assert.equal(free.quizMechanics, "free");
+		assert.equal("explain" in (free.tools ?? {}), false, "legacy tools.explain cleared");
 		const choice = composeQuizMechanics(before, "choice");
-		assert.equal(choice.tools?.explain, false);
-		for (const after of [free, choice]) {
+		assert.equal(choice.quizMechanics, "choice");
+		const both = composeQuizMechanics(before, "both");
+		assert.equal(both.quizMechanics, "both");
+		for (const after of [free, choice, both]) {
 			assert.equal(after.tools?.research, false, "the research toggle carries verbatim");
 			assert.deepEqual(after.prompts, before.prompts, "the prompts map carries verbatim");
 		}
+		const onlyLegacy = composeQuizMechanics({ tools: { explain: true } }, "both");
+		assert.equal(onlyLegacy.quizMechanics, "both");
+		assert.equal(onlyLegacy.tools, undefined, "empty tools map omitted after clearing legacy explain");
 	});
 });

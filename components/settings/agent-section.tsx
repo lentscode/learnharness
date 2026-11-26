@@ -66,6 +66,7 @@ import {
 	COMPACTION_THRESHOLD_FLOOR,
 	MODEL_SLOTS,
 	SEARCH_ENGINES,
+	resolveQuizMechanics,
 	resolveSettings,
 	isFileAccessFolder,
 	type AgentSettings,
@@ -73,6 +74,7 @@ import {
 	type GraphSettings,
 	type ModelSlotName,
 	type ModelsSettings,
+	type QuizMechanics,
 	type SearchEngineId,
 } from "@/src/core";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
@@ -198,13 +200,18 @@ export function composeWorkerRequestConcurrency(
 	return { ok: true, settings: next };
 }
 
-/** The quizzing mechanics (owner 2026-09-27): a segmented control, not a
- *  toggle — exactly one mechanic is ever active. `explain: true` arms
- *  free-recall (explain in, quiz out); anything else is multiple choice.
- *  `quiz` itself is never written (mechanics-managed — see quizMechanics
- *  in agent/tools.ts). Pure — exported for tests. */
-export function composeQuizMechanics(agent: AgentSettings | undefined, mechanics: "choice" | "free"): AgentSettings {
-	return { ...agent, tools: { ...agent?.tools, explain: mechanics === "free" } };
+/** The quizzing mechanics: a 3-way segmented control ("choice" | "free" |
+ *  "both"). Writes `agent.quizMechanics` and drops any legacy `tools.explain`
+ *  switch so there is a single source of truth; other tool toggles carry
+ *  verbatim. Pure — exported for tests. */
+export function composeQuizMechanics(agent: AgentSettings | undefined, mechanics: QuizMechanics): AgentSettings {
+	const next: AgentSettings = { ...agent, quizMechanics: mechanics };
+	if (agent?.tools && "explain" in agent.tools) {
+		const { explain: _legacy, ...rest } = agent.tools;
+		if (Object.keys(rest).length > 0) next.tools = rest;
+		else delete next.tools;
+	}
+	return next;
 }
 
 /** Compose the prober graph-tools toggle (wave 7): its own key in the
@@ -802,12 +809,11 @@ export function AgentSection({
 						</SettingsRow>
 					);
 				})()}
-				{/* The quizzing mechanic (owner 2026-09-27): segmented — exactly one
-				    of Multiple choice / Free recall is active; the choice swaps which
-				    quizzing tool BOTH agents carry (prober checks + teach checks).
-				    Persisted as agent.tools.explain; absent = Multiple choice. */}
+				{/* The quizzing mechanic: segmented — Multiple choice, Free recall,
+				    or Both; applies to both agents (prober + teacher). Persisted as
+				    agent.quizMechanics with legacy fallback to agent.tools.explain. */}
 				{(() => {
-					const free = agent?.tools?.explain === true;
+					const mechanics = resolveQuizMechanics(agent);
 					return (
 						<SettingsRow
 							label="Quizzing"
@@ -815,8 +821,12 @@ export function AgentSection({
 							testid="quiz-mechanics-row"
 						>
 							<SettingsSegmentedControl label="Quizzing mechanics" testidPrefix="quiz-mechanics"
-								options={[{ value: "choice", label: "Multiple choice" }, { value: "free", label: "Free recall" }]}
-								value={free ? "free" : "choice"} onChange={(next) => onSectionChange(composeQuizMechanics(agent, next))} />
+								options={[
+									{ value: "choice", label: "Multiple choice" },
+									{ value: "free", label: "Free recall" },
+									{ value: "both", label: "Both" },
+								]}
+								value={mechanics} onChange={(next) => onSectionChange(composeQuizMechanics(agent, next))} />
 						</SettingsRow>
 					);
 				})()}
