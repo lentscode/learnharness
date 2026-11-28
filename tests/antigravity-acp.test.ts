@@ -107,6 +107,16 @@ test("streams thinking, text, images, usage, context window, and enforces permis
 	assert.match(record.agentFile, /tools: \[\]/);
 	assert.match(record.agentFile, /You are a Socratic tutor\./);
 
+	const sessionRequest = record.requests.find((r: { method: string }) => r.method === "session/new");
+	const workspaceServer = JSON.parse(record.mcpConfig).mcpServers.learnharness;
+	assert.equal(sessionRequest.params.mcpServers.length, 1);
+	const [sessionServer] = sessionRequest.params.mcpServers;
+	assert.equal(sessionServer.name, "learnharness");
+	assert.equal(sessionServer.type, "http");
+	assert.equal(sessionServer.url, workspaceServer.serverUrl);
+	assert.equal(sessionServer.headers[0]?.name, "Authorization");
+	assert.ok(sessionServer.headers[0]?.value === workspaceServer.headers.Authorization, "ACP and workspace config must use the same bridge token");
+
 	// Verify built-in shell permission was rejected and bridge tool permission was approved
 	assert.equal(record.permissions[0].decision.outcome.optionId, "reject-once");
 	assert.equal(record.permissions[1].decision.outcome.optionId, "allow-once");

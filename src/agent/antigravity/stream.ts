@@ -489,7 +489,8 @@ class AntigravityProcess implements LiveProcess {
 	private sendNewSession(): void {
 		this.step = "session_new";
 		this.expectedRpcId = this.nextRpcId++;
-		this.send(acpNewSessionRequest(this.expectedRpcId, this.files.cwd));
+		// agy can discover workspace MCP tools without making them callable in the ACP session.
+		this.send(acpNewSessionRequest(this.expectedRpcId, this.files.cwd, this.bridge.mcpServers));
 	}
 
 	private sendSetModel(modelConfigId: string | undefined): void {

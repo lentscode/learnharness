@@ -1,6 +1,6 @@
 /**
  * Stand-in for `agy acp` in tests. Speaks ACP JSON-RPC 2.0 over stdin/stdout,
- * reads `.agents/mcp_config.json` from cwd when executing MCP directives, and
+ * connects to the MCP bridge registered in session/new when executing MCP directives, and
  * records received requests/permissions to FAKE_AGY_RECORD when set.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -40,11 +40,12 @@ function writeJson(obj) {
 }
 
 let lastSend = Promise.resolve();
+let bridgeServer;
 async function connectBridge() {
-	const raw = readFileSync(join(process.cwd(), ".agents", "mcp_config.json"), "utf8");
-	const { serverUrl, headers } = JSON.parse(raw).mcpServers[BRIDGE_SERVER_NAME];
+	if (bridgeServer?.type !== "http") throw new Error("LearnHarness MCP bridge was not registered in session/new");
+	const headers = Object.fromEntries(bridgeServer.headers.map(({ name, value }) => [name, value]));
 	const client = new Client({ name: "fake-agy", version: "1.0.0" });
-	const transport = new StreamableHTTPClientTransport(new URL(serverUrl), { requestInit: { headers } });
+	const transport = new StreamableHTTPClientTransport(new URL(bridgeServer.url), { requestInit: { headers } });
 	const send = transport.send.bind(transport);
 	transport.send = (...args) => (lastSend = send(...args));
 	await client.connect(transport);
@@ -284,6 +285,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
 			void writeJson({ jsonrpc: "2.0", id: msg.id, error: { code: -32000, message: "Authentication required" } });
 			return;
 		}
+		bridgeServer = msg.params.mcpServers.find((server) => server.name === BRIDGE_SERVER_NAME);
 		void writeJson({ jsonrpc: "2.0", id: msg.id, result: defaultSessionNewResult() });
 		return;
 	}

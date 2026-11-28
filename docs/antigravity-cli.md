@@ -22,9 +22,11 @@ The launcher removes credentials injected **only by LearnHarness's key store**. 
 Each child runs without a shell in an isolated temporary working directory containing:
 
 - `.agents/agents/learnharness/agent.md` carrying the LearnHarness system prompt with `tools: []`
-- `.agents/mcp_config.json` exposing LearnHarness's declared tools eagerly through a token-protected loopback Streamable HTTP MCP bridge (`timeoutSeconds: 1800`)
+- `.agents/mcp_config.json` requesting eager loading for the declared tools and a 30-minute tool timeout
 
-LearnHarness launches `agy acp --agent learnharness --process-per-session --include-default-customizations=false --disable-telemetry`, approves ACP `session/request_permission` requests **only** for its `learnharness` MCP bridge, and rejects all built-in tools (shell, filesystem, web, browser, subagents) and other MCP servers. Streamed ACP `tool_call` updates alone are insufficient: execution requires an authenticated MCP bridge request.
+LearnHarness launches `agy acp --agent learnharness --process-per-session --include-default-customizations=false --disable-telemetry`. It registers the token-protected loopback Streamable HTTP MCP bridge in ACP `session/new` so the session can call tools such as `read` and `pdf`. Antigravity controls the effective tool timeout for servers registered via ACP.
+
+LearnHarness approves ACP `session/request_permission` requests **only** for its `learnharness` MCP bridge and rejects all built-in tools (shell, filesystem, web, browser, subagents) and other MCP servers. Tool execution requires an authenticated MCP bridge request.
 
 ## Questions, reuse, and cancellation
 
