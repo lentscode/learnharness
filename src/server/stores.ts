@@ -14,6 +14,7 @@ import { settingsStore } from "../store/settings.ts";
 import { themeStore } from "../store/themes.ts";
 import { resolveSettings, type EffectiveSettings } from "../core/settings-resolution.ts";
 import { syncCustomProvider } from "./custom-provider.ts";
+import { syncAntigravityProvider } from "./antigravity-config.ts";
 import { configureWorkerRequestAdmission } from "../agent/worker-request-admission.ts";
 /** The wired adapters. Satisfies core/graph.ts's GraphDeps structurally. */
 export const stores = {
@@ -45,3 +46,4 @@ configureWorkerRequestAdmission(() => effectiveSettings().agent.workerRequestCon
 // Boot: register the custom endpoint (when configured) into piModels(); the
 // POST /api/custom-provider route re-syncs after every connect.
 syncCustomProvider();
+syncAntigravityProvider();

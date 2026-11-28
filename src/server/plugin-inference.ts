@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { normalizeContext, type AssistantMessage, type AssistantMessageEvent, type SimpleStreamOptions, type Usage } from "@earendil-works/pi-ai";
 import { AssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
 import type { PiEngine } from "../agent/models.ts";
+import { ANTIGRAVITY_PROVIDER } from "../agent/antigravity/constants.ts";
 import { CLAUDE_CODE_PROVIDER } from "../agent/claude-code/constants.ts";
 import { markUnadmittedUsage, usageWasAdmitted, type SubscriptionDispatchLifecycle } from "../agent/subscription-request-cycle.ts";
 import type { PluginCallPurpose, PluginModelSpec } from "../core/plugin-agents.ts";
@@ -201,8 +202,8 @@ export function createPluginInference(
 		if (options.reasoning !== undefined && options.reasoning !== engine.level) throw new Error("Set model.thinkingLevel instead of overriding engine reasoning");
 		// One-shot calls have no saved conversation. Own one routing identity per
 		// invocation (also stable across transport retries), never a plugin option.
-		// Claude Code must not retain/reuse a live process for a one-shot request.
-		const sessionId = model.provider === CLAUDE_CODE_PROVIDER ? undefined : randomUUID();
+		// External CLIs must not retain/reuse a live process for a one-shot request.
+		const sessionId = model.provider === CLAUDE_CODE_PROVIDER || model.provider === ANTIGRAVITY_PROVIDER ? undefined : randomUUID();
 		const source = engine.streamFn(engine.model, normalizeContext(request.context), { ...options, signal: combined, ...(sessionId ? { sessionId } : {}) });
 		for await (const event of source) {
 			if (event.type === "done" || event.type === "error") {

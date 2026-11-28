@@ -139,7 +139,9 @@ export async function PUT(request: Request, ctx: { params: Promise<{ section: st
 				? clampModelsLevels(parsed.settings as ModelsSettings)
 				: section === "agent" && agentHealed
 					? agentHealed
-					: parsed.settings;
+					: section === "antigravity" && record.antigravity?.models !== undefined
+						? { ...(parsed.settings as { enabled?: boolean }), models: record.antigravity.models }
+						: parsed.settings;
 
 	// Read-modify-write ONE section of the record; everything else rides
 	// along untouched (other sections, unknown keys — sanitize preserves).

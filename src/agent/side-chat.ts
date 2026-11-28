@@ -23,6 +23,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { normalizeContext, type AssistantMessage, type Message, type Usage } from "@earendil-works/pi-ai";
 import { backgroundCaptureStream, createBackgroundCapture } from "./background-capture.ts";
+import { ANTIGRAVITY_PROVIDER } from "./antigravity/constants.ts";
 import { CLAUDE_CODE_PROVIDER } from "./claude-code/constants.ts";
 import { providerEventObserver } from "./provider-events.ts";
 import { PATHS } from "../../config.ts";
@@ -113,9 +114,12 @@ export async function streamSideAnswer(opts: {
 	const capture = createBackgroundCapture({ role: "sideQuestion", runId: opts.runId ?? randomUUID(), sourceId: opts.chatId });
 	const providerEvents = opts.chatId ? providerEventObserver(opts.chatId, "sideQuestion") : undefined;
 	// OpenCode Go rejects requests without `x-opencode-session`; pi-ai derives
-	// it from this option. Claude Code treats it as a live process to resume,
+	// it from this option. External CLIs treat it as a live process to resume,
 	// which a side question must never do.
-	const sessionId = opts.chatId && opts.engine.model.provider !== CLAUDE_CODE_PROVIDER ? opts.chatId : undefined;
+	const sessionId = opts.chatId
+		&& opts.engine.model.provider !== CLAUDE_CODE_PROVIDER
+		&& opts.engine.model.provider !== ANTIGRAVITY_PROVIDER
+		? opts.chatId : undefined;
 	try {
 		const stream = backgroundCaptureStream(opts.engine.streamFn, capture)(opts.engine.model, normalizeContext({ systemPrompt: opts.instructions, messages, tools: [] }), {
 			signal: opts.signal,
