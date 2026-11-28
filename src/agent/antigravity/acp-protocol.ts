@@ -9,6 +9,13 @@ export type AcpPromptBlock =
 	| { type: "text"; text: string }
 	| { type: "image"; mimeType: string; data: string };
 
+export type AcpHttpMcpServer = {
+	type: "http";
+	name: string;
+	url: string;
+	headers: { name: string; value: string }[];
+};
+
 export type AcpUsage = Partial<Pick<Usage, "input" | "output" | "cacheRead" | "cacheWrite" | "reasoning">>;
 
 export type AcpToolCallInfo = {
@@ -75,12 +82,12 @@ export function acpInitializeRequest(id: number): string {
 	});
 }
 
-export function acpNewSessionRequest(id: number, cwd: string): string {
+export function acpNewSessionRequest(id: number, cwd: string, mcpServers: readonly AcpHttpMcpServer[] = []): string {
 	return JSON.stringify({
 		jsonrpc: "2.0",
 		id,
 		method: "session/new",
-		params: { cwd, mcpServers: [] },
+		params: { cwd, mcpServers },
 	});
 }
 

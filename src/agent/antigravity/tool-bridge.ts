@@ -13,13 +13,13 @@ import {
 	type CallToolResult,
 	type Tool as McpTool,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { AcpHttpMcpServer } from "./acp-protocol.ts";
 
 export const BRIDGE_SERVER_NAME = "learnharness";
 
 const LOOPBACK_HOST = "127.0.0.1";
 const TOKEN_BYTES = 32;
-// Must outlast LIVE_PROCESS_IDLE_TIMEOUT_MS (10 min) so unanswered learner questions
-// are terminated cleanly by LearnHarness rather than Antigravity's default 180s MCP timeout.
+// The workspace requests a timeout longer than LearnHarness's 10-minute idle limit for held calls.
 export const ANTIGRAVITY_MCP_TIMEOUT_SECONDS = 30 * 60;
 
 export type PendingToolCall = { id: string; metaId?: string; name: string; arguments: JsonObject };
@@ -28,6 +28,7 @@ type BridgeCallbacks = { onCall(): void; onError(error: Error): void; onCancel?(
 
 export type ToolBridge = {
 	mcpConfig: string;
+	mcpServers: readonly AcpHttpMcpServer[];
 	waitForToolCalls(count: number): Promise<PendingToolCall[]>;
 	resolveToolCall(call: PendingToolCall, result: ToolResultMessage): void;
 	getPendingToolCalls(): PendingToolCall[];
@@ -195,11 +196,11 @@ function closeHttpServer(server: http.Server): Promise<void> {
 	});
 }
 
-function toMcpConfig(port: number, authorization: string, tools: Tool[]): string {
+function toMcpConfig(serverUrl: string, authorization: string, tools: Tool[]): string {
 	if (tools.length === 0) return JSON.stringify({ mcpServers: {} });
 	const eagerTools = Object.fromEntries(tools.map((tool) => [tool.name, { eager: true, background: "off" }]));
 	const server = {
-		serverUrl: `http://${LOOPBACK_HOST}:${port}/mcp`,
+		serverUrl,
 		headers: { Authorization: authorization },
 		timeoutSeconds: ANTIGRAVITY_MCP_TIMEOUT_SECONDS,
 		enabledTools: tools.map((tool) => tool.name),
@@ -225,8 +226,15 @@ export async function createToolBridge(tools: Tool[], callbacks?: BridgeCallback
 		throw error;
 	}
 
+	const url = `http://${LOOPBACK_HOST}:${port}/mcp`;
 	return {
-		mcpConfig: toMcpConfig(port, authorization, tools),
+		mcpConfig: toMcpConfig(url, authorization, tools),
+		mcpServers: tools.length === 0 ? [] : [{
+			type: "http",
+			name: BRIDGE_SERVER_NAME,
+			url,
+			headers: [{ name: "Authorization", value: authorization }],
+		}],
 		waitForToolCalls: (count) => queue.waitFor(count),
 		resolveToolCall: (call, result) => queue.resolve(call, result),
 		getPendingToolCalls: () => queue.list(),
