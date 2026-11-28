@@ -31,6 +31,7 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { CacheRetention } from "@earendil-works/pi-ai";
 import { AUTH_PROVIDER_KEYS } from "./auth-keys.ts";
+import { ANTIGRAVITY_PROVIDER, type AntigravityDiscoveredModel } from "./contracts/antigravity.ts";
 import { CLAUDE_CODE_PROVIDER } from "./contracts/claude-code.ts";
 import type { ModelRole } from "../../config.ts";
 import type { ChatSettings } from "./contracts/chat.ts";
@@ -166,10 +167,15 @@ export interface ProviderKeyMissing {
  * (the label prefix varies by provider). */
 const PROVIDER_KEY_MISSING_TAIL = "key is set — add one in Settings → Keys";
 const CLAUDE_CODE_UNAVAILABLE = "Claude Code is unavailable. Enable and set it up in Settings → Providers.";
+const ANTIGRAVITY_UNAVAILABLE = "Antigravity CLI is unavailable. Enable and set it up in Settings → Providers.";
 export function providerKeyMissing(provider: string, slots: ModelSlotName[]): ProviderKeyMissing {
 	const label = AUTH_PROVIDER_KEYS.find((p) => p.id === provider)?.label ?? provider;
 	return {
-		error: provider === CLAUDE_CODE_PROVIDER ? CLAUDE_CODE_UNAVAILABLE : `No ${label} ${PROVIDER_KEY_MISSING_TAIL}`,
+		error: provider === CLAUDE_CODE_PROVIDER
+			? CLAUDE_CODE_UNAVAILABLE
+			: provider === ANTIGRAVITY_PROVIDER
+				? ANTIGRAVITY_UNAVAILABLE
+				: `No ${label} ${PROVIDER_KEY_MISSING_TAIL}`,
 		code: PROVIDER_KEY_MISSING_CODE,
 		provider,
 		slots,
@@ -180,7 +186,11 @@ export function providerKeyMissing(provider: string, slots: ModelSlotName[]): Pr
  * scary-error) — the envelope's home module owns the string so the
  * writer and the matcher can never drift. */
 export function isProviderKeyRefusal(error: string | undefined): boolean {
-	return !!error && (error.endsWith(PROVIDER_KEY_MISSING_TAIL) || error === CLAUDE_CODE_UNAVAILABLE);
+	return !!error && (
+		error.endsWith(PROVIDER_KEY_MISSING_TAIL)
+		|| error === CLAUDE_CODE_UNAVAILABLE
+		|| error === ANTIGRAVITY_UNAVAILABLE
+	);
 }
 /** The typed throw for in-process seams (extraction pipeline) — the
  * ProviderKeyMissing sibling of ModelsNotConfiguredError: callers catch
@@ -537,6 +547,8 @@ export interface UserSettings {
 	dictation?: DictationSettings;
 	/** Explicit app-wide opt-in; absent/invalid is off, including older records. */
 	claudeCode?: { enabled?: boolean };
+	/** Explicit app-wide opt-in plus cached account models discovered via `agy acp`. */
+	antigravity?: { enabled?: boolean; models?: AntigravityDiscoveredModel[] };
 	agent?: AgentSettings;
 	/** The strong/cheap/vision model slots (model slots wave, 2026-09-20). */
 	models?: ModelsSettings;
@@ -894,6 +906,23 @@ function sanitizeGraph(raw: Record<string, unknown>): GraphSettings {
  *  reject-with-rationale (the graph chunk-budget precedent). */
 export const COMPACTION_THRESHOLD_FLOOR = 32_000;
 
+function sanitizeAntigravityModels(raw: unknown): AntigravityDiscoveredModel[] | undefined {
+	if (!Array.isArray(raw)) return undefined;
+	const byId = new Map<string, AntigravityDiscoveredModel>();
+	for (const entry of raw) {
+		if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+		const rec = entry as Record<string, unknown>;
+		if (typeof rec.id !== "string" || !rec.id.trim()) continue;
+		const id = rec.id.trim();
+		const name = typeof rec.name === "string" && rec.name.trim() ? rec.name.trim() : id;
+		const levels = Array.isArray(rec.thinkingLevels)
+			? [...new Set(rec.thinkingLevels.filter((v): v is ThinkingLevel => typeof v === "string" && THINKING_LEVELS.includes(v as ThinkingLevel)))]
+			: [];
+		byId.set(id, { id, name, thinkingLevels: levels });
+	}
+	return [...byId.values()];
+}
+
 function sanitizeCompaction(raw: Record<string, unknown>): CompactionSettings {
 	const out: CompactionSettings = {};
 	const includeReasoning = boolOrDrop(raw.includeReasoning);
@@ -932,6 +961,19 @@ export function sanitizeUserSettings(raw: unknown): UserSettings | null {
 		out.claudeCode = raw !== null && typeof raw === "object" && !Array.isArray(raw)
 			&& typeof (raw as Record<string, unknown>).enabled === "boolean"
 			? { enabled: (raw as { enabled: boolean }).enabled } : {};
+	}
+	if (r.antigravity !== undefined) {
+		const raw = r.antigravity;
+		if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
+			const rec = raw as Record<string, unknown>;
+			const cleaned: NonNullable<UserSettings["antigravity"]> = {};
+			if (typeof rec.enabled === "boolean") cleaned.enabled = rec.enabled;
+			const models = sanitizeAntigravityModels(rec.models);
+			if (models !== undefined) cleaned.models = models;
+			out.antigravity = cleaned;
+		} else {
+			out.antigravity = {};
+		}
 	}
 	if (r.agent !== null && typeof r.agent === "object" && !Array.isArray(r.agent)) {
 		out.agent = sanitizeAgent(r.agent as Record<string, unknown>);
